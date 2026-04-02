@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# C++ build artifacts
+cpp/build/
+cpp/CMakeFiles/
+cpp/CMakeCache.txt
+cpp/cmake_install.cmake
+cpp/Makefile
+cpp/*.o
+cpp/*.a
+cpp/*.so
+
+# Qt
+*.pro.user
+
+# Claude Code
+.claude/
+
+# Test notebooks
+test/
+
+# OS
+.DS_Store
+Thumbs.db
