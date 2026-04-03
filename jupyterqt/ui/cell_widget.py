@@ -6,7 +6,7 @@ from PySide6.QtGui import (QFont, QColor, QTextOption, QSyntaxHighlighter,
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPlainTextEdit,
                                 QLabel, QFrame, QSizePolicy, QListWidget,
                                 QListWidgetItem, QTextBrowser, QApplication,
-                                QToolButton)
+                                QToolButton, QScrollArea, QAbstractScrollArea)
 
 from jupyterqt.models.cell_model import CellModel, CellType, OutputItem
 from jupyterqt.ui.output_area import OutputArea
@@ -476,6 +476,90 @@ class _MarkdownView(QTextBrowser):
 
 
 # #########################################################################################################################################
+# Output container (scrollable + collapsible via left bar)
+
+class _ClickableBar(QFrame):
+    clicked = Signal()
+
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        self.clicked.emit()
+
+
+class _OutputContainer(QWidget):
+    _STYLE_EXPANDED = "QFrame { background: #c8c8c8; border-radius: 2px; } QFrame:hover { background: #a0a0a0; }"
+    _STYLE_COLLAPSED = "QFrame { background: #808080; border-radius: 2px; } QFrame:hover { background: #606060; }"
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._collapsed = False
+
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(0, 2, 0, 2)
+        outer.setSpacing(4)
+
+        self._bar = _ClickableBar(self)
+        self._bar.setFixedWidth(4)
+        self._bar.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._bar.setStyleSheet(self._STYLE_EXPANDED)
+        self._bar.clicked.connect(self._onBarClicked)
+        outer.addWidget(self._bar)
+
+        right = QWidget(self)
+        right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
+
+        self._scroll = QScrollArea(right)
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameStyle(0)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._scroll.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
+        self._scroll.setMinimumHeight(0)
+
+        self._output_area = OutputArea(self._scroll)
+        self._scroll.setWidget(self._output_area)
+
+        self._dots = QLabel("···", right)
+        self._dots.setStyleSheet("color: #888; font-size: 10pt; padding: 2px 4px;")
+        self._dots.setVisible(False)
+
+        right_layout.addWidget(self._scroll)
+        right_layout.addWidget(self._dots)
+        outer.addWidget(right, 1)
+
+        from jupyterqt.settings import Settings
+        Settings.instance().output_max_lines_changed.connect(lambda _: self._updateMaxHeight())
+        Settings.instance().output_font_size_changed.connect(lambda _: self._updateMaxHeight())
+        self._updateMaxHeight()
+
+    def _updateMaxHeight(self) -> None:
+        from jupyterqt.settings import Settings
+        from PySide6.QtGui import QFont, QFontMetrics
+        font = QFont("Monospace", Settings.instance().outputFontSize)
+        line_h = QFontMetrics(font).lineSpacing()
+        self._scroll.setMaximumHeight(line_h * Settings.instance().outputMaxLines + 8)
+
+    def _onBarClicked(self) -> None:
+        self._collapsed = not self._collapsed
+        self._scroll.setVisible(not self._collapsed)
+        self._dots.setVisible(self._collapsed)
+        self._bar.setStyleSheet(self._STYLE_COLLAPSED if self._collapsed else self._STYLE_EXPANDED)
+
+    def appendOutput(self, output) -> None:
+        self._output_area.appendOutput(output)
+
+    def clear(self) -> None:
+        self._output_area.clear()
+        if self._collapsed:
+            self._collapsed = False
+            self._scroll.setVisible(True)
+            self._dots.setVisible(False)
+            self._bar.setStyleSheet(self._STYLE_EXPANDED)
+
+
+# #########################################################################################################################################
 # Visual mode style constants
 
 _STYLE_NORMAL = (
@@ -519,6 +603,7 @@ class CellWidget(QWidget):
         self._is_executing = False
         self._visual_mode = "normal"   # "normal" | "selected" | "edit"
         self._is_rendered = False
+        self._heading_number: str = ""
         self._setupUi()
         self._connectSignals()
 
@@ -582,18 +667,18 @@ class CellWidget(QWidget):
         frame_layout.addLayout(top_row)
 
         if is_markdown:
-            self._output_area = None
+            self._output_container = None
             if self._cell_model.source.strip():
                 self._renderMarkdown()
             self._updateFoldButton()
         else:
-            self._output_area = OutputArea(self)
-            self._output_area.setVisible(False)
-            frame_layout.addWidget(self._output_area)
+            self._output_container = _OutputContainer(self)
+            self._output_container.setVisible(False)
+            frame_layout.addWidget(self._output_container)
             for o in self._cell_model.outputs:
-                self._output_area.appendOutput(o)
+                self._output_container.appendOutput(o)
             if self._cell_model.outputs:
-                self._output_area.setVisible(True)
+                self._output_container.setVisible(True)
             self.setExecutionCount(self._cell_model.execution_count)
 
         outer.addWidget(self._frame)
@@ -627,6 +712,15 @@ class CellWidget(QWidget):
     def _renderMarkdown(self) -> None:
         import markdown as md_lib
         source = self._editor.toPlainText()
+        if self._heading_number:
+            lines = source.split('\n')
+            for i, line in enumerate(lines):
+                m = _HEADING_RE.match(line)
+                if m:
+                    rest = line[m.end():].lstrip(' ')
+                    lines[i] = line[:m.end()] + ' ' + self._heading_number + ' ' + rest
+                    break
+            source = '\n'.join(lines)
         html = md_lib.markdown(source, extensions=['tables', 'fenced_code'])
         self._rendered_view.setHtml(_MD_CSS + html)
         self._editor.setVisible(False)
@@ -640,6 +734,13 @@ class CellWidget(QWidget):
             return
         level = _headingLevel(self._editor.toPlainText())
         self._fold_btn.setVisible(level > 0)
+
+    def setHeadingNumber(self, num_str: str) -> None:
+        if self._heading_number == num_str:
+            return
+        self._heading_number = num_str
+        if self._is_rendered:
+            self._renderMarkdown()
 
     def setFolded(self, folded: bool) -> None:
         if self._fold_btn:
@@ -692,16 +793,16 @@ class CellWidget(QWidget):
         self._editor.setTextCursor(cursor)
 
     def appendOutput(self, output: OutputItem) -> None:
-        if self._output_area is None:
+        if self._output_container is None:
             return
-        self._output_area.appendOutput(output)
-        self._output_area.setVisible(True)
+        self._output_container.appendOutput(output)
+        self._output_container.setVisible(True)
 
     def clearOutputs(self) -> None:
-        if self._output_area is None:
+        if self._output_container is None:
             return
-        self._output_area.clear()
-        self._output_area.setVisible(False)
+        self._output_container.clear()
+        self._output_container.setVisible(False)
 
     def setCompletionProvider(self, fn) -> None:
         if isinstance(self._editor, _CodeEditor):

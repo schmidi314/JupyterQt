@@ -118,6 +118,15 @@ class MainWindow(QMainWindow):
         self._action_shutdown.triggered.connect(self._shutdownKernel)
         kernel_menu.addAction(self._action_shutdown)
 
+        # Settings
+        settings_menu = menubar.addMenu("&Settings")
+        self._action_settings_general = QAction("&General", self)
+        self._action_settings_general.triggered.connect(self._showGeneralSettings)
+        settings_menu.addAction(self._action_settings_general)
+        self._action_settings_shortcuts = QAction("&Keyboard Shortcuts", self)
+        self._action_settings_shortcuts.triggered.connect(self._showKeyboardShortcuts)
+        settings_menu.addAction(self._action_settings_shortcuts)
+
     def _buildToolbar(self) -> None:
         tb = QToolBar("Main", self)
         tb.setMovable(False)
@@ -238,6 +247,14 @@ class MainWindow(QMainWindow):
         ctrl = self._currentController()
         if ctrl:
             self._workspace.openNotebookInNewView(ctrl)
+
+    def _showGeneralSettings(self) -> None:
+        from jupyterqt.ui.settings_dialog import GeneralSettingsDialog
+        GeneralSettingsDialog(self).exec()
+
+    def _showKeyboardShortcuts(self) -> None:
+        from jupyterqt.ui.keyboard_shortcuts_dialog import KeyboardShortcutsDialog
+        KeyboardShortcutsDialog(self).exec()
 
     def _onNewNotebook(self, directory: str) -> None:
         self._app.createNotebook(directory)

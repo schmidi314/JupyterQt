@@ -6,6 +6,8 @@ from PySide6.QtCore import QObject, Signal
 _DEFAULTS = {
     "inputFontSize": 10,
     "outputFontSize": 10,
+    "headingNumbering": False,
+    "outputMaxLines": 13,
 }
 
 _SETTINGS_PATH = Path.home() / ".jupyter" / "qtj" / "settings.json"
@@ -14,6 +16,8 @@ _SETTINGS_PATH = Path.home() / ".jupyter" / "qtj" / "settings.json"
 class Settings(QObject):
     input_font_size_changed = Signal(int)
     output_font_size_changed = Signal(int)
+    heading_numbering_changed = Signal(bool)
+    output_max_lines_changed = Signal(int)
 
     _instance: "Settings | None" = None
 
@@ -55,6 +59,33 @@ class Settings(QObject):
             self._data["outputFontSize"] = size
             self._save()
             self.output_font_size_changed.emit(size)
+
+    # ── heading numbering ─────────────────────────────────────────────
+
+    @property
+    def headingNumbering(self) -> bool:
+        return self._data["headingNumbering"]
+
+    @headingNumbering.setter
+    def headingNumbering(self, value: bool) -> None:
+        if self._data["headingNumbering"] != value:
+            self._data["headingNumbering"] = value
+            self._save()
+            self.heading_numbering_changed.emit(value)
+
+    # ── output max lines ──────────────────────────────────────────────
+
+    @property
+    def outputMaxLines(self) -> int:
+        return self._data["outputMaxLines"]
+
+    @outputMaxLines.setter
+    def outputMaxLines(self, value: int) -> None:
+        value = max(1, value)
+        if self._data["outputMaxLines"] != value:
+            self._data["outputMaxLines"] = value
+            self._save()
+            self.output_max_lines_changed.emit(value)
 
     # ── persistence ───────────────────────────────────────────────────
 

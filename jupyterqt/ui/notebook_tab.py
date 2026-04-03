@@ -49,6 +49,10 @@ class NotebookTab(QScrollArea):
         self._buildCells()
         self._connectController()
 
+        from jupyterqt.settings import Settings
+        Settings.instance().heading_numbering_changed.connect(lambda _: self._updateHeadingNumbers())
+        self._updateHeadingNumbers()
+
         # Start in command mode with first cell selected
         if self._orderedWidgets():
             self._select(0)
@@ -63,7 +67,7 @@ class NotebookTab(QScrollArea):
             return
         current_cellId = widgets[self._selected_idx].cellId
         current_cell = self._controller.model.getCell(current_cellId)
-        level = _headingLevel(current_cell.source) if current_cell else 0
+        level = self._cellHeadingLevel(current_cell)
         prefix = '#' * (level if level > 0 else 1) + ' '
         cell = self._controller.addCellAbove(current_cellId, CellType.MARKDOWN)
         if cell:
@@ -79,7 +83,7 @@ class NotebookTab(QScrollArea):
             return
         current_cellId = widgets[self._selected_idx].cellId
         current_cell = self._controller.model.getCell(current_cellId)
-        level = _headingLevel(current_cell.source) if current_cell else 0
+        level = self._cellHeadingLevel(current_cell)
         prefix = '#' * (level if level > 0 else 1) + ' '
         cell = self._controller.addCellBelow(current_cellId, CellType.MARKDOWN)
         if cell:
@@ -265,6 +269,35 @@ class NotebookTab(QScrollArea):
             self._select(self._selected_idx + 1)
             return
 
+        # Left: collapse expanded heading, or jump to heading above
+        if key == Qt.Key.Key_Left:
+            if 0 <= self._selected_idx < len(widgets):
+                cellId = widgets[self._selected_idx].cellId
+                cell = self._controller.model.getCell(cellId)
+                if (self._cellHeadingLevel(cell) > 0
+                        and cellId not in self._folded_headings
+                        and self._foldRange(cellId)):
+                    self._onFoldToggle(cellId)
+                else:
+                    target = self._findHeadingAbove(self._selected_idx)
+                    if target is not None:
+                        self._select(target)
+            return
+
+        # Right: expand collapsed heading, or jump to heading below
+        if key == Qt.Key.Key_Right:
+            if 0 <= self._selected_idx < len(widgets):
+                cellId = widgets[self._selected_idx].cellId
+                cell = self._controller.model.getCell(cellId)
+                if (self._cellHeadingLevel(cell) > 0
+                        and cellId in self._folded_headings):
+                    self._onFoldToggle(cellId)
+                else:
+                    target = self._findHeadingBelow(self._selected_idx)
+                    if target is not None:
+                        self._select(target)
+            return
+
         # D + D to delete (two D presses within 500 ms)
         if key == Qt.Key.Key_D:
             now = time.monotonic()
@@ -293,6 +326,9 @@ class NotebookTab(QScrollArea):
         w = self._cell_widgets.get(cellId)
         if w and w._editor.toPlainText() != source:
             w.setSource(source)
+        cell = self._controller.model.getCell(cellId)
+        if cell and cell.cell_type == CellType.MARKDOWN:
+            self._updateHeadingNumbers()
 
     def _onOutputAppended(self, cellId: str, output: object) -> None:
         w = self._cell_widgets.get(cellId)
@@ -318,12 +354,66 @@ class NotebookTab(QScrollArea):
 
     def _onCellAdded(self, index: int, cell: object) -> None:
         w = self._insertCellWidget(cell, index)
+        self._updateHeadingNumbers()
         # Select the new cell in command mode
         self._select(index)
         self._enterCommandMode()
 
     # #########################################################################################################################################
     # Heading fold
+
+    def _computeHeadingNumbers(self) -> dict[str, str]:
+        from jupyterqt.settings import Settings
+        if not Settings.instance().headingNumbering:
+            return {}
+        widgets = self._orderedWidgets()
+        counters = [0] * 6
+        result = {}
+        for w in widgets:
+            cell = self._controller.model.getCell(w.cellId)
+            level = self._cellHeadingLevel(cell)
+            if level == 0:
+                continue
+            counters[level - 1] += 1
+            for i in range(level, 6):
+                counters[i] = 0
+            if level == 1:
+                num_str = f"{counters[0]}."
+            else:
+                num_str = ".".join(str(counters[i]) for i in range(level))
+            result[w.cellId] = num_str
+        return result
+
+    def _updateHeadingNumbers(self) -> None:
+        numbers = self._computeHeadingNumbers()
+        for w in self._orderedWidgets():
+            w.setHeadingNumber(numbers.get(w.cellId, ""))
+
+    def _findHeadingAbove(self, from_idx: int) -> int | None:
+        widgets = self._orderedWidgets()
+        for i in range(from_idx - 1, -1, -1):
+            if not widgets[i].isVisible():
+                continue
+            cell = self._controller.model.getCell(widgets[i].cellId)
+            if self._cellHeadingLevel(cell) > 0:
+                return i
+        return None
+
+    def _findHeadingBelow(self, from_idx: int) -> int | None:
+        widgets = self._orderedWidgets()
+        for i in range(from_idx + 1, len(widgets)):
+            if not widgets[i].isVisible():
+                continue
+            cell = self._controller.model.getCell(widgets[i].cellId)
+            if self._cellHeadingLevel(cell) > 0:
+                return i
+        return None
+
+    def _cellHeadingLevel(self, cell) -> int:
+        """Returns heading level only for markdown cells; 0 for code/raw."""
+        if cell is None or cell.cell_type != CellType.MARKDOWN:
+            return 0
+        return _headingLevel(cell.source)
 
     def _foldRange(self, cellId: str) -> list:
         """Returns the widgets that fall under heading cellId (until next equal/higher heading)."""
@@ -334,14 +424,14 @@ class NotebookTab(QScrollArea):
         cell = self._controller.model.getCell(cellId)
         if cell is None:
             return []
-        heading_level = _headingLevel(cell.source)
+        heading_level = self._cellHeadingLevel(cell)
         if heading_level == 0:
             return []
         result = []
         for w in widgets[heading_idx + 1:]:
             other_cell = self._controller.model.getCell(w.cellId)
             if other_cell:
-                other_level = _headingLevel(other_cell.source)
+                other_level = self._cellHeadingLevel(other_cell)
                 if other_level > 0 and other_level <= heading_level:
                     break
             result.append(w)
@@ -374,6 +464,7 @@ class NotebookTab(QScrollArea):
         if w:
             self._layout.removeWidget(w)
             w.deleteLater()
+        self._updateHeadingNumbers()
         widgets = self._orderedWidgets()
         if widgets:
             self._select(min(self._selected_idx, len(widgets) - 1))
@@ -401,6 +492,7 @@ class NotebookTab(QScrollArea):
         cell = self._controller.model.getCell(cellId)
         if cell:
             self._insertCellWidget(cell, idx)
+            self._updateHeadingNumbers()
             self._select(self._selected_idx)
 
     def getCellWidget(self, cellId: str) -> CellWidget | None:
