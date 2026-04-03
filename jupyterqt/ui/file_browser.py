@@ -1,11 +1,12 @@
 from PySide6.QtCore import Signal, Qt, QThreadPool, QTimer
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QTreeWidget, QTreeWidgetItem,
-                                QLabel, QPushButton, QHBoxLayout, QMenu,
+                                QLabel, QPushButton, QToolButton, QHBoxLayout, QMenu,
                                 QInputDialog, QMessageBox)
 
-from jupyterqt.network.rest_client import RestClient
 from jupyterqt.config import ServerConfig
+from jupyterqt.network.rest_client import RestClient
 from jupyterqt.network.rest_workers import RestWorker
+from jupyterqt.ui.icon_registry import icon
 
 
 class FileBrowserWidget(QWidget):
@@ -22,19 +23,17 @@ class FileBrowserWidget(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        header = QHBoxLayout()
-        self._path_label = QLabel("/", self)
+        # Row 1: action buttons
+        action_row = QHBoxLayout()
+        action_row.setContentsMargins(4, 4, 4, 4)
         new_nb_btn = QPushButton("+", self)
         new_nb_btn.setFixedWidth(28)
         new_nb_btn.setToolTip("New notebook in current directory")
-        new_nb_btn.clicked.connect(
-            lambda: self.new_notebook_requested.emit(self._current_path)
-        )
+        new_nb_btn.clicked.connect(lambda: self.new_notebook_requested.emit(self._current_path))
         new_dir_btn = QPushButton(self)
-        new_dir_btn.setIcon(self.style().standardIcon(
-            self.style().StandardPixmap.SP_FileDialogNewFolder
-        ))
+        new_dir_btn.setIcon(self.style().standardIcon(self.style().StandardPixmap.SP_FileDialogNewFolder))
         new_dir_btn.setFixedWidth(28)
         new_dir_btn.setToolTip("New folder in current directory")
         new_dir_btn.clicked.connect(self._onNewFolder)
@@ -42,11 +41,24 @@ class FileBrowserWidget(QWidget):
         refresh_btn.setFixedWidth(28)
         refresh_btn.setToolTip("Refresh")
         refresh_btn.clicked.connect(self._refresh)
-        header.addWidget(self._path_label, 1)
-        header.addWidget(new_nb_btn)
-        header.addWidget(new_dir_btn)
-        header.addWidget(refresh_btn)
-        layout.addLayout(header)
+        action_row.addStretch()
+        action_row.addWidget(new_nb_btn)
+        action_row.addWidget(new_dir_btn)
+        action_row.addWidget(refresh_btn)
+        layout.addLayout(action_row)
+
+        # Row 2: breadcrumb path
+        self._breadcrumb_bar = QWidget(self)
+        self._breadcrumb_bar.setStyleSheet(
+            "QWidget#breadcrumb { background: #f0f0f0; border-bottom: 1px solid #d8d8d8; }"
+            "QToolButton { border: none; padding: 1px 3px; background: transparent; font-size: 9pt; }"
+            "QToolButton:hover { background: #dde; border-radius: 3px; }"
+        )
+        self._breadcrumb_bar.setObjectName("breadcrumb")
+        self._breadcrumb_layout = QHBoxLayout(self._breadcrumb_bar)
+        self._breadcrumb_layout.setContentsMargins(4, 3, 4, 3)
+        self._breadcrumb_layout.setSpacing(0)
+        layout.addWidget(self._breadcrumb_bar)
 
         self._tree = QTreeWidget(self)
         self._tree.setHeaderHidden(True)
@@ -55,13 +67,24 @@ class FileBrowserWidget(QWidget):
         self._tree.customContextMenuRequested.connect(self._onContextMenu)
         layout.addWidget(self._tree)
 
+        self._server_info_label = QLabel("", self)
+        self._server_info_label.setWordWrap(True)
+        self._server_info_label.setStyleSheet(
+            "QLabel { color: #666; font-size: 8pt; padding: 4px 6px; "
+            "border-top: 1px solid #d8d8d8; background: #f8f8f8; }"
+        )
+        layout.addWidget(self._server_info_label)
+
         self._current_path = ""
+        self._updateBreadcrumb()
         QTimer.singleShot(0, self._refresh)
+        QTimer.singleShot(0, self._fetchServerInfo)
 
     def updateConfig(self, config: ServerConfig) -> None:
         self._config = config
         self._rest.updateConfig(config)
         self._refresh()
+        self._fetchServerInfo()
 
     # ------------------------------------------------------------------ Refresh
 
@@ -70,6 +93,23 @@ class FileBrowserWidget(QWidget):
         w.signals.finished.connect(self._onContentsLoaded)
         w.signals.error.connect(self._onLoadError)
         self._pool.start(w)
+
+    def _fetchServerInfo(self) -> None:
+        w = RestWorker(self._rest.getServerInfo)
+        w.signals.finished.connect(self._onServerInfo)
+        self._pool.start(w)
+
+    def _onServerInfo(self, data: object) -> None:
+        if not isinstance(data, dict):
+            return
+        hostname = data.get("hostname") or data.get("base_url", "")
+        root_dir = data.get("root_dir") or data.get("notebook_dir", "")
+        parts = []
+        if hostname:
+            parts.append(f"Host: {hostname}")
+        if root_dir:
+            parts.append(f"Dir: {root_dir}")
+        self._server_info_label.setText("\n".join(parts))
 
     def _onLoadError(self, error: str) -> None:
         self._tree.clear()
@@ -97,17 +137,52 @@ class FileBrowserWidget(QWidget):
             name = item_data.get("name", "")
             itype = item_data.get("type", "")
             path = item_data.get("path", "")
+            item.setText(0, name)
             if itype == "directory":
-                item.setText(0, f"📁 {name}")
+                item.setIcon(0, self.style().standardIcon(self.style().StandardPixmap.SP_DirIcon))
             elif itype == "notebook":
-                item.setText(0, f"📓 {name}")
+                item.setIcon(0, icon("notebook"))
+            elif name.endswith(".py"):
+                item.setIcon(0, icon("python"))
             else:
-                item.setText(0, f"📄 {name}")
+                item.setIcon(0, self.style().standardIcon(self.style().StandardPixmap.SP_FileIcon))
             item.setData(0, Qt.ItemDataRole.UserRole, {"type": itype, "path": path,
                                                         "name": name})
             self._tree.addTopLevelItem(item)
 
     # ------------------------------------------------------------------ Navigation
+
+    def _navigateTo(self, path: str) -> None:
+        self._current_path = path
+        self._updateBreadcrumb()
+        self._refresh()
+
+    def _updateBreadcrumb(self) -> None:
+        while self._breadcrumb_layout.count():
+            item = self._breadcrumb_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        root_btn = QToolButton(self._breadcrumb_bar)
+        root_btn.setIcon(self.style().standardIcon(self.style().StandardPixmap.SP_DirIcon))
+        root_btn.setToolTip("Root")
+        root_btn.clicked.connect(lambda: self._navigateTo(""))
+        self._breadcrumb_layout.addWidget(root_btn)
+
+        if self._current_path:
+            parts = self._current_path.split("/")
+            for i, part in enumerate(parts):
+                sep = QLabel(" › ", self._breadcrumb_bar)
+                sep.setStyleSheet("color: #999; font-size: 9pt;")
+                self._breadcrumb_layout.addWidget(sep)
+                target = "/".join(parts[:i + 1])
+                btn = QToolButton(self._breadcrumb_bar)
+                btn.setText(part)
+                btn.setToolTip(target)
+                btn.clicked.connect(lambda checked=False, p=target: self._navigateTo(p))
+                self._breadcrumb_layout.addWidget(btn)
+
+        self._breadcrumb_layout.addStretch()
 
     def _onItemDoubleClicked(self, item: QTreeWidgetItem, column: int) -> None:
         data = item.data(0, Qt.ItemDataRole.UserRole)
@@ -116,9 +191,7 @@ class FileBrowserWidget(QWidget):
         if data["type"] == "notebook":
             self.notebook_selected.emit(data["path"])
         elif data["type"] == "directory":
-            self._current_path = data["path"]
-            self._path_label.setText("/" + self._current_path)
-            self._refresh()
+            self._navigateTo(data["path"])
 
     # ------------------------------------------------------------------ New folder
 

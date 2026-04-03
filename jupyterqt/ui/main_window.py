@@ -1,7 +1,7 @@
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QAction
 from PySide6.QtWidgets import (QMainWindow, QWidget, QSplitter, QStatusBar,
-                                QLabel, QToolBar)
+                                QLabel)
 
 from jupyterqt.config import ServerConfig
 from jupyterqt.controllers.app_controller import AppController
@@ -22,7 +22,6 @@ class MainWindow(QMainWindow):
 
         self._buildUi()
         self._buildMenu()
-        self._buildToolbar()
         self._connectApp()
 
     # ------------------------------------------------------------------ UI
@@ -126,20 +125,6 @@ class MainWindow(QMainWindow):
         self._action_settings_shortcuts = QAction("&Keyboard Shortcuts", self)
         self._action_settings_shortcuts.triggered.connect(self._showKeyboardShortcuts)
         settings_menu.addAction(self._action_settings_shortcuts)
-
-    def _buildToolbar(self) -> None:
-        tb = QToolBar("Main", self)
-        tb.setMovable(False)
-        self.addToolBar(tb)
-        tb.addAction(self._action_save)
-        tb.addSeparator()
-        tb.addAction(self._action_run_all)
-        tb.addAction(self._action_interrupt)
-        tb.addAction(self._action_restart)
-        tb.addSeparator()
-        tb.addAction(self._action_split_h)
-        tb.addAction(self._action_split_v)
-        tb.addAction(self._action_new_view)
 
     def _connectApp(self) -> None:
         self._app.notebook_opened.connect(self._onNotebookOpened)

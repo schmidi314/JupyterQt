@@ -52,6 +52,10 @@ class WorkspaceWidget(QWidget):
         reg.addKeyboardShortcut('notebook', 'insert-heading-above', 'shift_a')
         reg.addKeyboardShortcut('notebook', 'insert-heading-below', 'shift_b')
 
+    def cmdRunSelectedCell(self):
+        if self._active_pane is not None:
+            self._active_pane.getCurrentNotebookTab().cmdRunSelectedCell()
+
     def cmdAddCellAbove(self):
         if self._active_pane is not None:
             self._active_pane.getCurrentNotebookTab().cmdAddCell('above')

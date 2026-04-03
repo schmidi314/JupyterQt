@@ -138,6 +138,12 @@ class RestClient:
         r.raise_for_status()
         return r.json()
 
+    def getServerInfo(self) -> dict:
+        url = f"{self._config.base_url}/api"
+        r = self._session.get(url, timeout=5)
+        r.raise_for_status()
+        return r.json()
+
     def checkServer(self) -> str:
         """Returns 'ok', 'unauthorized', or an error message string."""
         try:

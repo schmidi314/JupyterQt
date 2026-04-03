@@ -29,6 +29,7 @@ class NotebookController(QObject):
     cell_removed = Signal(str)                       # cellId
     cell_moved = Signal(str, int)                    # cellId, new_index
     cell_type_changed = Signal(str, object)          # cellId, CellType
+    notebook_dirty_changed = Signal(bool)            # is_dirty
 
     def __init__(self, path: str, config: ServerConfig, parent=None):
         super().__init__(parent)
@@ -42,6 +43,7 @@ class NotebookController(QObject):
         self._completion_callbacks: dict[str, object] = {}
         self._inspection_callbacks: dict[str, object] = {}
         self._pool = QThreadPool.globalInstance()
+        self._is_dirty: bool = False
 
     @property
     def model(self) -> NotebookModel | None:
@@ -211,10 +213,17 @@ class NotebookController(QObject):
         self._pool.start(w)
 
     def _onSaveDone(self, _: object) -> None:
+        self._is_dirty = False
+        self.notebook_dirty_changed.emit(False)
         self.notebook_saved.emit()
 
     def _onSaveError(self, e: str) -> None:
         self.notebook_save_failed.emit(e)
+
+    def _markDirty(self) -> None:
+        if not self._is_dirty:
+            self._is_dirty = True
+            self.notebook_dirty_changed.emit(True)
 
     # ---------- Cell editing ----------
 
@@ -224,6 +233,7 @@ class NotebookController(QObject):
         cell = self._model.getCell(cellId)
         if cell and cell.source != source:
             cell.source = source
+            self._markDirty()
             self.cell_source_changed.emit(cellId, source)
 
     def addCell(self, cell_type: CellType = CellType.CODE,
@@ -232,6 +242,7 @@ class NotebookController(QObject):
             return None
         cell = self._model.addCell(cell_type, index)
         idx = self._model.indexOf(cell.cellId)
+        self._markDirty()
         self.cell_added.emit(idx, cell)
         return cell
 
@@ -253,6 +264,7 @@ class NotebookController(QObject):
         if not self._model:
             return
         self._model.removeCell(cellId)
+        self._markDirty()
         self.cell_removed.emit(cellId)
 
     def moveCellUp(self, cellId: str) -> None:
@@ -261,6 +273,7 @@ class NotebookController(QObject):
         idx = self._model.indexOf(cellId)
         if idx > 0:
             self._model.moveCell(cellId, idx - 1)
+            self._markDirty()
             self.cell_moved.emit(cellId, idx - 1)
 
     def changeCellType(self, cellId: str, new_type: CellType) -> None:
@@ -270,6 +283,7 @@ class NotebookController(QObject):
         if cell is None or cell.cell_type == new_type:
             return
         cell.cell_type = new_type
+        self._markDirty()
         self.cell_type_changed.emit(cellId, new_type)
 
     def moveCellDown(self, cellId: str) -> None:
@@ -278,6 +292,7 @@ class NotebookController(QObject):
         idx = self._model.indexOf(cellId)
         if idx < len(self._model.cells) - 1:
             self._model.moveCell(cellId, idx + 1)
+            self._markDirty()
             self.cell_moved.emit(cellId, idx + 1)
 
     # ---------- Kernel message slots ----------

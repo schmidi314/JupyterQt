@@ -615,6 +615,7 @@ class CellWidget(QWidget):
     # UI setup
 
     def _setupUi(self):
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 2, 0, 2)
         outer.setSpacing(0)

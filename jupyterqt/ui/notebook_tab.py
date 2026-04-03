@@ -1,16 +1,18 @@
 import time
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QScrollArea, QWidget, QVBoxLayout
+from PySide6.QtWidgets import QScrollArea, QWidget, QVBoxLayout, QHBoxLayout, QToolButton, QStyle
 
 from jupyterqt.commands import CommandRegistry
 from jupyterqt.controllers.notebook_controller import NotebookController
 from jupyterqt.models.cell_model import CellModel, CellType, OutputItem
 from jupyterqt.models.kernel_state import KernelStatus
 from jupyterqt.ui.cell_widget import CellWidget, _headingLevel
+from jupyterqt.ui.icon_registry import icon
+from jupyterqt.ui.kernel_status_widget import KernelStatusWidget
 
 
-class NotebookTab(QScrollArea):
+class NotebookTab(QWidget):
     """
     Manages two interaction modes:
 
@@ -35,16 +37,68 @@ class NotebookTab(QScrollArea):
         self._last_key_time: float = 0.0
         self._folded_headings: set[str] = set()
 
-        self.setWidgetResizable(True)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # ── toolbar ─────────────────────────────────────────────────────
+        toolbar = QWidget(self)
+        toolbar.setFixedHeight(28)
+        toolbar.setStyleSheet("QWidget { background: #f5f5f5; border-bottom: 1px solid #e0e0e0; }")
+        tl = QHBoxLayout(toolbar)
+        tl.setContentsMargins(6, 0, 6, 0)
+        tl.setSpacing(2)
+
+        sp = QStyle.StandardPixmap
+        btn_style = ("QToolButton { border: none; padding: 2px; background: transparent; }"
+                     "QToolButton:hover { background: #ddd; border-radius: 3px; }")
+
+        save_btn = QToolButton(toolbar)
+        save_btn.setIcon(icon("save"))
+        save_btn.setToolTip("Save (Ctrl+S)")
+        save_btn.setFixedSize(24, 22)
+        save_btn.setStyleSheet(btn_style)
+        save_btn.clicked.connect(self._onSaveClicked)
+        tl.addWidget(save_btn)
+
+        for std_icon, tip, slot in (
+            (sp.SP_MediaPlay,     "Run selected cell", self._onRunClicked),
+            (sp.SP_MediaStop,     "Interrupt kernel",  self._onInterruptClicked),
+            (sp.SP_BrowserReload, "Restart kernel",    self._onRestartClicked),
+        ):
+            btn = QToolButton(toolbar)
+            btn.setIcon(self.style().standardIcon(std_icon))
+            btn.setToolTip(tip)
+            btn.setFixedSize(24, 22)
+            btn.setStyleSheet(btn_style)
+            btn.clicked.connect(slot)
+            tl.addWidget(btn)
+
+        tl.addStretch()
+
+        self._kernel_status = KernelStatusWidget(toolbar)
+        tl.addWidget(self._kernel_status)
+
+        outer.addWidget(toolbar)
+
+        # ── scroll area ──────────────────────────────────────────────────
+        self._scroll = QScrollArea(self)
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._scroll.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
         self._content = QWidget()
         self._layout = QVBoxLayout(self._content)
         self._layout.setContentsMargins(12, 12, 12, 12)
         self._layout.setSpacing(4)
         self._layout.addStretch()
-        self.setWidget(self._content)
+        self._scroll.setWidget(self._content)
+        outer.addWidget(self._scroll)
+
+        self._kernel_status.setStatus(self._controller.kernelStatus)
+        self._controller.kernel_status_changed.connect(self._kernel_status.setStatus)
 
         self._buildCells()
         self._connectController()
@@ -97,6 +151,23 @@ class NotebookTab(QScrollArea):
         widgets = self._orderedWidgets()
         if 0 <= self._selected_idx < len(widgets):
             self._controller.changeCellType(widgets[self._selected_idx].cellId, cell_type)
+
+    def _onSaveClicked(self) -> None:
+        self._controller.save()
+
+    def _onRunClicked(self) -> None:
+        self.cmdRunSelectedCell()
+
+    def _onInterruptClicked(self) -> None:
+        self._controller.interruptKernel()
+
+    def _onRestartClicked(self) -> None:
+        self._controller.restartKernel()
+
+    def cmdRunSelectedCell(self) -> None:
+        widgets = self._orderedWidgets()
+        if 0 <= self._selected_idx < len(widgets):
+            self._onExecuteRequested(widgets[self._selected_idx].cellId)
 
     def cmdAddCell(self, above_or_below: str) -> None:
         print('cmdAddCell', above_or_below)
@@ -187,7 +258,7 @@ class NotebookTab(QScrollArea):
         self._selected_idx = idx
         for i, w in enumerate(widgets):
             w.setVisualMode("selected" if i == idx else "normal")
-        self.ensureWidgetVisible(widgets[idx])
+        self._scroll.ensureWidgetVisible(widgets[idx])
 
     def _enterCommandMode(self) -> None:
         self._mode = "command"
@@ -350,7 +421,7 @@ class NotebookTab(QScrollArea):
         if w:
             w.setExecuting(executing)
             if executing:
-                self.ensureWidgetVisible(w)
+                self._scroll.ensureWidgetVisible(w)
 
     def _onCellAdded(self, index: int, cell: object) -> None:
         w = self._insertCellWidget(cell, index)

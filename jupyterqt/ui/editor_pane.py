@@ -3,7 +3,6 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
                                 QToolButton, QLabel)
 
 from jupyterqt.controllers.notebook_controller import NotebookController
-from jupyterqt.ui.kernel_status_widget import KernelStatusWidget
 from jupyterqt.ui.notebook_tab import NotebookTab
 
 
@@ -20,6 +19,7 @@ class EditorPane(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._notebook_id_to_tab: dict[str, NotebookTab] = {}
+        self._notebook_id_to_name: dict[str, str] = {}
         self._is_active = False
 
         layout = QVBoxLayout(self)
@@ -33,9 +33,6 @@ class EditorPane(QWidget):
         hl = QHBoxLayout(header)
         hl.setContentsMargins(4, 0, 4, 0)
         hl.setSpacing(2)
-
-        self._kernel_status = KernelStatusWidget(header)
-        hl.addWidget(self._kernel_status)
         hl.addStretch()
 
         for label, tip, sig in (
@@ -49,11 +46,9 @@ class EditorPane(QWidget):
                 "QToolButton { border: none; font-size: 9pt; color: #555; }"
                 "QToolButton:hover { background: #ddd; border-radius: 3px; }"
             )
-            # Use simple text icons
             btn.clicked.connect(sig)
             hl.addWidget(btn)
 
-        # Re-create with proper icons
         hl.itemAt(hl.count() - 2).widget().setText("┃┃")  # split-v icon
         hl.itemAt(hl.count() - 1).widget().setText("═")   # split-h icon
 
@@ -90,7 +85,6 @@ class EditorPane(QWidget):
         """Open a view of this notebook. Focuses an existing tab if already open."""
         notebookId = controller.notebookId
         if notebookId in self._notebook_id_to_tab:
-            # Already open in this pane — just focus it
             tab = self._notebook_id_to_tab[notebookId]
             self._tabs.setCurrentWidget(tab)
             return
@@ -100,9 +94,10 @@ class EditorPane(QWidget):
         idx = self._tabs.addTab(tab, tab_name)
         self._tabs.setCurrentIndex(idx)
         self._notebook_id_to_tab[notebookId] = tab
+        self._notebook_id_to_name[notebookId] = tab_name
 
-        controller.kernel_status_changed.connect(
-            lambda s, nid=notebookId: self._onKernelStatus(nid, s)
+        controller.notebook_dirty_changed.connect(
+            lambda dirty, nid=notebookId: self._onDirtyChanged(nid, dirty)
         )
 
     def currentController(self) -> NotebookController | None:
@@ -134,11 +129,22 @@ class EditorPane(QWidget):
         else:
             self.setStyleSheet("")
 
+    def _onDirtyChanged(self, notebookId: str, dirty: bool) -> None:
+        tab = self._notebook_id_to_tab.get(notebookId)
+        if tab is None:
+            return
+        idx = self._tabs.indexOf(tab)
+        if idx == -1:
+            return
+        base = self._notebook_id_to_name.get(notebookId, "")
+        self._tabs.setTabText(idx, f"● {base}" if dirty else base)
+
     def _onTabClose(self, index: int) -> None:
         tab = self._tabs.widget(index)
         if isinstance(tab, NotebookTab):
             nid = tab.controller.notebookId
             self._notebook_id_to_tab.pop(nid, None)
+            self._notebook_id_to_name.pop(nid, None)
         self._tabs.removeTab(index)
         self.current_controller_changed.emit(self.currentController())
 
@@ -146,11 +152,3 @@ class EditorPane(QWidget):
         ctrl = self.currentController()
         self.current_controller_changed.emit(ctrl)
         self.focused.emit()
-        if ctrl:
-            from jupyterqt.models.kernel_state import KernelStatus
-            self._kernel_status.setStatus(ctrl.kernelStatus)
-
-    def _onKernelStatus(self, notebookId: str, status) -> None:
-        ctrl = self.currentController()
-        if ctrl and ctrl.notebookId == notebookId:
-            self._kernel_status.setStatus(status)
