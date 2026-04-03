@@ -42,6 +42,8 @@ class WorkspaceWidget(QWidget):
         reg = CommandRegistry.instance()
         reg.register('notebook', 'add-cell-above', [], [], self.cmdAddCellAbove)
         reg.register('notebook', 'add-cell-below', [], [], self.cmdAddCellBelow)
+        reg.addKeyboardShortcut('notebook', 'add-cell-above', 'a')
+        reg.addKeyboardShortcut('notebook', 'add-cell-below', 'b')
 
     def cmdAddCellAbove(self):
         if self._active_pane is not None:

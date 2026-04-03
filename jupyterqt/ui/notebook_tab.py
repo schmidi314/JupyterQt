@@ -179,9 +179,14 @@ class NotebookTab(QScrollArea):
 
     def keyPressEvent(self, event) -> None:
         reg = CommandRegistry.instance()
+        if reg.tryToExecuteKeyboardShortcut(event, mod_filter=('at least one of', ('ctrl', 'alt', 'meta'))):
+            return
 
-        if self._mode != "command":
+        if self._mode == "edit":
             super().keyPressEvent(event)
+            return
+
+        if reg.tryToExecuteKeyboardShortcut(event):
             return
 
         key = event.key()
@@ -189,8 +194,7 @@ class NotebookTab(QScrollArea):
         widgets = self._orderedWidgets()
 
         # Shift+Enter: run selected cell
-        if (key == Qt.Key.Key_Return and
-                mods & Qt.KeyboardModifier.ShiftModifier):
+        if key == Qt.Key.Key_Return and mods & Qt.KeyboardModifier.ShiftModifier:
             if 0 <= self._selected_idx < len(widgets):
                 self._onExecuteRequested(widgets[self._selected_idx].cellId)
             return
@@ -212,13 +216,13 @@ class NotebookTab(QScrollArea):
             return
 
         # Add cell above / below — dispatched through the command registry
-        if key == Qt.Key.Key_A:
-            CommandRegistry.instance().execute('notebook', 'add-cell-above')
-            return
-
-        if key == Qt.Key.Key_B:
-            CommandRegistry.instance().execute('notebook', 'add-cell-below')
-            return
+        # if key == Qt.Key.Key_A:
+        #     CommandRegistry.instance().execute('notebook', 'add-cell-above')
+        #     return
+        #
+        # if key == Qt.Key.Key_B:
+        #     CommandRegistry.instance().execute('notebook', 'add-cell-below')
+        #     return
 
         # D + D to delete (two D presses within 500 ms)
         if key == Qt.Key.Key_D:
