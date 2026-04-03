@@ -7,7 +7,7 @@ from jupyterqt.commands import CommandRegistry
 from jupyterqt.controllers.notebook_controller import NotebookController
 from jupyterqt.models.cell_model import CellModel, CellType, OutputItem
 from jupyterqt.models.kernel_state import KernelStatus
-from jupyterqt.ui.cell_widget import CellWidget
+from jupyterqt.ui.cell_widget import CellWidget, _headingLevel
 
 
 class NotebookTab(QScrollArea):
@@ -33,6 +33,7 @@ class NotebookTab(QScrollArea):
         self._selected_idx = 0
         self._last_key: int | None = None
         self._last_key_time: float = 0.0
+        self._folded_headings: set[str] = set()
 
         self.setWidgetResizable(True)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -104,6 +105,7 @@ class NotebookTab(QScrollArea):
         w.move_down_requested.connect(self._controller.moveCellDown)
         w.edit_mode_requested.connect(self._onEditModeRequested)
         w.escape_pressed.connect(self._onEscapePressed)
+        w.fold_toggle_requested.connect(self._onFoldToggle)
         return w
 
     def _connectController(self) -> None:
@@ -136,6 +138,16 @@ class NotebookTab(QScrollArea):
             self._selected_idx = 0
             return
         idx = max(0, min(idx, len(widgets) - 1))
+        # Skip hidden (folded) cells — find nearest visible
+        if not widgets[idx].isVisible():
+            fwd = next((i for i in range(idx, len(widgets)) if widgets[i].isVisible()), None)
+            bwd = next((i for i in range(idx - 1, -1, -1) if widgets[i].isVisible()), None)
+            if fwd is not None:
+                idx = fwd
+            elif bwd is not None:
+                idx = bwd
+            else:
+                return
         self._selected_idx = idx
         for i, w in enumerate(widgets):
             w.setVisualMode("selected" if i == idx else "normal")
@@ -278,7 +290,54 @@ class NotebookTab(QScrollArea):
         self._select(index)
         self._enterCommandMode()
 
+    # #########################################################################################################################################
+    # Heading fold
+
+    def _foldRange(self, cellId: str) -> list:
+        """Returns the widgets that fall under heading cellId (until next equal/higher heading)."""
+        widgets = self._orderedWidgets()
+        heading_idx = next((i for i, w in enumerate(widgets) if w.cellId == cellId), None)
+        if heading_idx is None:
+            return []
+        cell = self._controller.model.getCell(cellId)
+        if cell is None:
+            return []
+        heading_level = _headingLevel(cell.source)
+        if heading_level == 0:
+            return []
+        result = []
+        for w in widgets[heading_idx + 1:]:
+            other_cell = self._controller.model.getCell(w.cellId)
+            if other_cell:
+                other_level = _headingLevel(other_cell.source)
+                if other_level > 0 and other_level <= heading_level:
+                    break
+            result.append(w)
+        return result
+
+    def _onFoldToggle(self, cellId: str) -> None:
+        fold_range = self._foldRange(cellId)
+        if not fold_range:
+            return
+        is_folded = cellId in self._folded_headings
+        for w in fold_range:
+            w.setVisible(is_folded)    # unfold if currently folded, fold if not
+        heading_w = self._cell_widgets.get(cellId)
+        if is_folded:
+            self._folded_headings.discard(cellId)
+            if heading_w:
+                heading_w.setFolded(False)
+        else:
+            self._folded_headings.add(cellId)
+            if heading_w:
+                heading_w.setFolded(True)
+
     def _onCellRemoved(self, cellId: str) -> None:
+        # Unfold range before removing a heading that was folded
+        if cellId in self._folded_headings:
+            for w in self._foldRange(cellId):
+                w.setVisible(True)
+            self._folded_headings.discard(cellId)
         w = self._cell_widgets.pop(cellId, None)
         if w:
             self._layout.removeWidget(w)
@@ -297,6 +356,10 @@ class NotebookTab(QScrollArea):
         self._select(new_index)
 
     def _onCellTypeChanged(self, cellId: str, new_type) -> None:
+        if cellId in self._folded_headings:
+            for w in self._foldRange(cellId):
+                w.setVisible(True)
+            self._folded_headings.discard(cellId)
         old_w = self._cell_widgets.pop(cellId, None)
         if old_w is None:
             return

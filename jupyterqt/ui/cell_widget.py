@@ -1,13 +1,52 @@
-from PySide6.QtCore import Qt, Signal, QSize, QPoint
+import re
+
+from PySide6.QtCore import Qt, Signal, QPoint
 from PySide6.QtGui import (QFont, QColor, QTextOption, QSyntaxHighlighter,
                             QTextCharFormat)
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPlainTextEdit,
                                 QLabel, QFrame, QSizePolicy, QListWidget,
-                                QListWidgetItem, QTextBrowser, QApplication)
+                                QListWidgetItem, QTextBrowser, QApplication,
+                                QToolButton)
 
 from jupyterqt.models.cell_model import CellModel, CellType, OutputItem
 from jupyterqt.ui.output_area import OutputArea
 
+
+# #########################################################################################################################################
+# Heading detection
+
+_HEADING_RE = re.compile(r'^#{1,6}')
+
+
+def _headingLevel(source: str) -> int:
+    """Returns 1-6 if source starts with markdown heading hashes, else 0."""
+    m = _HEADING_RE.match(source.lstrip('\n'))
+    return len(m.group(0)) if m else 0
+
+
+# #########################################################################################################################################
+# Markdown CSS
+
+_MD_CSS = """<style>
+body { font-family: sans-serif; margin: 0; padding: 2px 4px; }
+h1 { font-size: 1.8em; font-weight: bold; margin: 4px 0 2px 0; border-bottom: 1px solid #ddd; padding-bottom: 2px; }
+h2 { font-size: 1.4em; font-weight: bold; margin: 4px 0 2px 0; }
+h3 { font-size: 1.15em; font-weight: bold; margin: 4px 0 2px 0; }
+h4, h5, h6 { font-size: 1.0em; font-weight: bold; margin: 4px 0 2px 0; }
+p { margin: 2px 0; }
+code { background: #f0f0f0; padding: 1px 3px; font-family: monospace; border-radius: 2px; }
+pre { background: #f0f0f0; padding: 8px; border-radius: 4px; }
+ul, ol { margin: 2px 0; padding-left: 24px; }
+li { margin: 1px 0; }
+blockquote { border-left: 3px solid #ddd; margin: 4px 0; padding-left: 8px; color: #666; }
+table { border-collapse: collapse; margin: 4px 0; }
+th, td { border: 1px solid #ddd; padding: 4px 8px; }
+th { background: #f5f5f5; font-weight: bold; }
+</style>"""
+
+
+# #########################################################################################################################################
+# Syntax highlighter (code cells)
 
 class _PythonHighlighter(QSyntaxHighlighter):
     _KEYWORDS = [
@@ -20,36 +59,39 @@ class _PythonHighlighter(QSyntaxHighlighter):
 
     def __init__(self, document):
         super().__init__(document)
-        import re
+        import re as _re
         self._rules = []
 
         kw_fmt = QTextCharFormat()
         kw_fmt.setForeground(QColor("#0000aa"))
         kw_fmt.setFontWeight(700)
-        self._rules.append((re.compile(r'\b(' + '|'.join(self._KEYWORDS) + r')\b'), kw_fmt))
+        self._rules.append((_re.compile(r'\b(' + '|'.join(self._KEYWORDS) + r')\b'), kw_fmt))
 
         str_fmt = QTextCharFormat()
         str_fmt.setForeground(QColor("#008000"))
-        self._rules.append((re.compile(r'\".*?\"|\'.*?\''), str_fmt))
+        self._rules.append((_re.compile(r'\".*?\"|\'.*?\''), str_fmt))
 
         comment_fmt = QTextCharFormat()
         comment_fmt.setForeground(QColor("#808080"))
         comment_fmt.setFontItalic(True)
-        self._rules.append((re.compile(r'#[^\n]*'), comment_fmt))
+        self._rules.append((_re.compile(r'#[^\n]*'), comment_fmt))
 
         num_fmt = QTextCharFormat()
         num_fmt.setForeground(QColor("#aa5500"))
-        self._rules.append((re.compile(r'\b\d+(\.\d+)?\b'), num_fmt))
+        self._rules.append((_re.compile(r'\b\d+(\.\d+)?\b'), num_fmt))
 
         func_fmt = QTextCharFormat()
         func_fmt.setForeground(QColor("#6600aa"))
-        self._rules.append((re.compile(r'\b\w+(?=\()'), func_fmt))
+        self._rules.append((_re.compile(r'\b\w+(?=\()'), func_fmt))
 
     def highlightBlock(self, text: str):
         for pattern, fmt in self._rules:
             for m in pattern.finditer(text):
                 self.setFormat(m.start(), m.end() - m.start(), fmt)
 
+
+# #########################################################################################################################################
+# Completion popup
 
 class _CompletionPopup(QFrame):
     """Floating completion list; never steals keyboard focus from the editor."""
@@ -76,8 +118,7 @@ class _CompletionPopup(QFrame):
         )
         self.hide()
 
-    def populate(self, matches: list, cursor_start: int, cursor_end: int,
-                 global_pos) -> None:
+    def populate(self, matches: list, cursor_start: int, cursor_end: int, global_pos) -> None:
         self._cursor_start = cursor_start
         self._cursor_end = cursor_end
         self._list.clear()
@@ -111,6 +152,9 @@ class _CompletionPopup(QFrame):
         self._editor.setFocus()
 
 
+# #########################################################################################################################################
+# Inspect popup
+
 class _InspectPopup(QFrame):
     """Shows function signature and docstring from an inspect_reply."""
 
@@ -140,10 +184,7 @@ class _InspectPopup(QFrame):
         from jupyterqt.settings import Settings
         size = Settings.instance().outputFontSize
 
-
-
         if "text/html" in mime_data:
-            # Kernel provided HTML — use it directly, inject font size
             html = mime_data["text/html"]
             self._browser.setHtml(
                 f'<div style="font-family:monospace; font-size:{size}pt">{html}</div>'
@@ -158,10 +199,8 @@ class _InspectPopup(QFrame):
 
         self.resize(self._MAX_W, self._MAX_H)
 
-        # Prefer showing above the cursor; fall back to below
         screen = QApplication.primaryScreen().availableGeometry()
-        x = max(screen.left(), min(cursor_global_pos.x(),
-                                   screen.right() - self._MAX_W))
+        x = max(screen.left(), min(cursor_global_pos.x(), screen.right() - self._MAX_W))
         y_above = cursor_global_pos.y() - self._MAX_H - 4
         y_below = cursor_global_pos.y() + line_height + 4
         y = y_above if y_above >= screen.top() else y_below
@@ -169,6 +208,9 @@ class _InspectPopup(QFrame):
         self.show()
         self.raise_()
 
+
+# #########################################################################################################################################
+# Base editor
 
 class _AutoHeightEditor(QPlainTextEdit):
     """Base class: no scrollbars, height tracks document content exactly."""
@@ -221,6 +263,9 @@ class _AutoHeightEditor(QPlainTextEdit):
         super().keyPressEvent(event)
 
 
+# #########################################################################################################################################
+# Code editor
+
 class _CodeEditor(_AutoHeightEditor):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -236,11 +281,11 @@ class _CodeEditor(_AutoHeightEditor):
         )
         self._highlighter = _PythonHighlighter(self.document())
         self._popup = _CompletionPopup(self)
-        self._completion_provider = None   # set via setCompletionProvider()
-        self._completion_seq = 0           # guards against stale async replies
+        self._completion_provider = None
+        self._completion_seq = 0
         self._inspect_popup = _InspectPopup(self)
-        self._inspection_provider = None   # set via setInspectionProvider()
-        self._last_inspect_detail = -1     # tracks detail_level of current popup
+        self._inspection_provider = None
+        self._last_inspect_detail = -1
 
     def setCompletionProvider(self, fn) -> None:
         """fn(code, cursor_pos, callback) — provided by NotebookController."""
@@ -270,9 +315,6 @@ class _CodeEditor(_AutoHeightEditor):
         key = event.key()
         mods = event.modifiers()
 
-        # Shift+Tab: first press → detail_level 0 (signature),
-        #            second press while popup open → detail_level 1 (full docstring),
-        #            third press → dismiss
         if key == Qt.Key.Key_Backtab:
             if not self._inspect_popup.isVisible():
                 self._triggerInspection(detail_level=0)
@@ -283,7 +325,6 @@ class _CodeEditor(_AutoHeightEditor):
                 self._last_inspect_detail = -1
             return
 
-        # Any key dismisses the inspect popup (except bare modifiers)
         if self._inspect_popup.isVisible() and key not in (
                 Qt.Key.Key_Shift, Qt.Key.Key_Control, Qt.Key.Key_Alt,
                 Qt.Key.Key_Meta):
@@ -306,12 +347,10 @@ class _CodeEditor(_AutoHeightEditor):
             if key == Qt.Key.Key_Escape:
                 self._popup.hide()
                 return
-            # Any other key: pass through, then re-trigger
             super().keyPressEvent(event)
             self._triggerCompletion(retrigger=True)
             return
 
-        # Ctrl+Space always triggers completion
         if key == Qt.Key.Key_Space and mods & Qt.KeyboardModifier.ControlModifier:
             self._triggerCompletion(retrigger=False)
             return
@@ -323,8 +362,6 @@ class _CodeEditor(_AutoHeightEditor):
             if (self._completion_provider and col > 0 and
                     (line_text[col - 1].isalnum() or line_text[col - 1] in ('_', '.'))):
                 self._triggerCompletion(retrigger=False)
-                # Popup will appear asynchronously; don't insert spaces yet.
-                # If no provider or no completions arrive, fall through on next Tab.
                 return
             self.textCursor().insertText("    ")
             return
@@ -343,10 +380,9 @@ class _CodeEditor(_AutoHeightEditor):
             lambda matches, cs, ce: self._onCompletions(matches, cs, ce, seq),
         )
 
-    def _onCompletions(self, matches: list, cursor_start: int,
-                        cursor_end: int, seq: int) -> None:
+    def _onCompletions(self, matches: list, cursor_start: int, cursor_end: int, seq: int) -> None:
         if seq != self._completion_seq:
-            return   # stale reply
+            return
         if not matches:
             self._popup.hide()
             return
@@ -368,14 +404,13 @@ class _CodeEditor(_AutoHeightEditor):
 
     def _onInspection(self, mime_data: dict, detail_level: int) -> None:
         if detail_level != self._last_inspect_detail:
-            return   # stale reply
+            return
         cursor_rect = self.cursorRect()
         global_pos = self.mapToGlobal(cursor_rect.topLeft())
         line_h = self.fontMetrics().lineSpacing()
         self._inspect_popup.showContent(mime_data, global_pos, line_h)
 
-    def _applyCompletion(self, match: str, cursor_start: int,
-                          cursor_end: int) -> None:
+    def _applyCompletion(self, match: str, cursor_start: int, cursor_end: int) -> None:
         from PySide6.QtGui import QTextCursor
         cursor = self.textCursor()
         cursor.setPosition(cursor_start)
@@ -384,19 +419,65 @@ class _CodeEditor(_AutoHeightEditor):
         self.setTextCursor(cursor)
 
 
+# #########################################################################################################################################
+# Markdown editor
+
 class _MarkdownEditor(_AutoHeightEditor):
     def __init__(self, parent=None):
         super().__init__(parent)
         from jupyterqt.settings import Settings
-        font = QFont("Monospace", Settings.instance().inputFontSize)
-        font.setStyleHint(QFont.StyleHint.TypeWriter)
+        font = QFont("sans-serif", Settings.instance().inputFontSize)
         self.setFont(font)
         self.setStyleSheet(
             "QPlainTextEdit { background: #fffde7; border: none; padding: 4px; }"
         )
 
+    def _updateHeight(self) -> None:
+        doc = self.document()
+        doc.setTextWidth(self.width() if self.width() > 0 else 600)
+        height = int(doc.size().height()) + 8
+        scrollbar_h = self.horizontalScrollBar().height() if self.horizontalScrollBar().isVisible() else 0
+        self.setFixedHeight(max(height + scrollbar_h, 30))
 
-# Visual mode constants
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._updateHeight()
+
+
+# #########################################################################################################################################
+# Markdown rendered view
+
+class _MarkdownView(QTextBrowser):
+    """Read-only rendered markdown. Emits clicked on mouse press to trigger edit mode."""
+    clicked = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setReadOnly(True)
+        self.setFrameStyle(0)
+        self.setOpenExternalLinks(True)
+        self.setStyleSheet("QTextBrowser { background: transparent; border: none; padding: 0; }")
+        from jupyterqt.settings import Settings
+        Settings.instance().output_font_size_changed.connect(self._adjustHeight)
+
+    def _adjustHeight(self) -> None:
+        doc = self.document()
+        doc.setTextWidth(self.width() if self.width() > 0 else 600)
+        height = int(doc.size().height()) + 8
+        self.setFixedHeight(max(height, 20))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._adjustHeight()
+
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        self.clicked.emit()
+
+
+# #########################################################################################################################################
+# Visual mode style constants
+
 _STYLE_NORMAL = (
     "QFrame { border: 1px solid #e0e0e0; border-radius: 4px; background: white; }"
 )
@@ -417,23 +498,27 @@ _STYLE_EXECUTING = (
 )
 
 
+# #########################################################################################################################################
+# CellWidget
+
 class CellWidget(QWidget):
-    source_changed = Signal(str, str)       # cellId, source
-    execute_requested = Signal(str)         # cellId
-    delete_requested = Signal(str)          # cellId
-    add_above_requested = Signal(str)       # cellId
-    add_below_requested = Signal(str)       # cellId
-    move_up_requested = Signal(str)         # cellId
-    move_down_requested = Signal(str)       # cellId
-    # Mode signals (for NotebookTab)
-    edit_mode_requested = Signal(str)       # cellId — editor got focus
-    escape_pressed = Signal(str)            # cellId — Esc in editor
+    source_changed = Signal(str, str)           # cellId, source
+    execute_requested = Signal(str)             # cellId
+    delete_requested = Signal(str)              # cellId
+    add_above_requested = Signal(str)           # cellId
+    add_below_requested = Signal(str)           # cellId
+    move_up_requested = Signal(str)             # cellId
+    move_down_requested = Signal(str)           # cellId
+    edit_mode_requested = Signal(str)           # cellId — editor got focus
+    escape_pressed = Signal(str)                # cellId — Esc in editor
+    fold_toggle_requested = Signal(str)         # cellId — heading fold button clicked
 
     def __init__(self, cell_model: CellModel, parent=None):
         super().__init__(parent)
         self._cell_model = cell_model
         self._is_executing = False
         self._visual_mode = "normal"   # "normal" | "selected" | "edit"
+        self._is_rendered = False
         self._setupUi()
         self._connectSignals()
 
@@ -441,7 +526,8 @@ class CellWidget(QWidget):
     def cellId(self) -> str:
         return self._cell_model.cellId
 
-    # ------------------------------------------------------------------ UI
+    # #########################################################################################################################################
+    # UI setup
 
     def _setupUi(self):
         outer = QVBoxLayout(self)
@@ -455,49 +541,71 @@ class CellWidget(QWidget):
         frame_layout.setContentsMargins(0, 0, 0, 0)
         frame_layout.setSpacing(0)
 
-        # Top row: prompt + editor + run button + menu
         top_row = QHBoxLayout()
         top_row.setContentsMargins(4, 4, 4, 4)
         top_row.setSpacing(6)
 
-        self._prompt_label = QLabel("[ ]:", self)
-        self._prompt_label.setFixedWidth(60)
-        self._prompt_label.setAlignment(
-            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop
-        )
-        self._prompt_label.setStyleSheet(
-            "color: #888; font-family: monospace; font-size: 10pt;"
-        )
+        is_markdown = self._cell_model.cell_type == CellType.MARKDOWN
 
-        if self._cell_model.cell_type == CellType.CODE:
-            self._editor = _CodeEditor(self)
-        else:
+        if is_markdown:
+            self._prompt_label = None
+            self._fold_btn = QToolButton(self)
+            self._fold_btn.setFixedSize(20, 20)
+            self._fold_btn.setText("▼")
+            self._fold_btn.setVisible(False)
+            self._fold_btn.setStyleSheet(
+                "QToolButton { border: none; color: #888; font-size: 9pt; background: transparent; }"
+                "QToolButton:hover { color: #333; }"
+            )
+            self._fold_btn.clicked.connect(lambda: self.fold_toggle_requested.emit(self.cellId))
+            top_row.addWidget(self._fold_btn)
+
             self._editor = _MarkdownEditor(self)
-            self._prompt_label.setText("Md:")
+            self._rendered_view = _MarkdownView(self)
+            self._rendered_view.setVisible(False)
+            self._rendered_view.clicked.connect(lambda: self.edit_mode_requested.emit(self.cellId))
+            top_row.addWidget(self._editor, 1)
+            top_row.addWidget(self._rendered_view, 1)
+        else:
+            self._fold_btn = None
+            self._rendered_view = None
+            self._prompt_label = QLabel("[ ]:", self)
+            self._prompt_label.setFixedWidth(60)
+            self._prompt_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
+            self._prompt_label.setStyleSheet("color: #888; font-family: monospace; font-size: 10pt;")
+            self._editor = _CodeEditor(self)
+            top_row.addWidget(self._prompt_label)
+            top_row.addWidget(self._editor, 1)
 
         self._editor.setPlainText(self._cell_model.source)
         self._editor._updateHeight()
-        top_row.addWidget(self._prompt_label)
-        top_row.addWidget(self._editor, 1)
         frame_layout.addLayout(top_row)
 
-        self._output_area = OutputArea(self)
-        self._output_area.setVisible(False)
-        frame_layout.addWidget(self._output_area)
+        if is_markdown:
+            self._output_area = None
+            if self._cell_model.source.strip():
+                self._renderMarkdown()
+            self._updateFoldButton()
+        else:
+            self._output_area = OutputArea(self)
+            self._output_area.setVisible(False)
+            frame_layout.addWidget(self._output_area)
+            for o in self._cell_model.outputs:
+                self._output_area.appendOutput(o)
+            if self._cell_model.outputs:
+                self._output_area.setVisible(True)
+            self.setExecutionCount(self._cell_model.execution_count)
 
         outer.addWidget(self._frame)
 
-        for o in self._cell_model.outputs:
-            self._output_area.appendOutput(o)
-        if self._cell_model.outputs:
-            self._output_area.setVisible(True)
-
-        self.setExecutionCount(self._cell_model.execution_count)
-
     def _connectSignals(self):
-        self._editor.shift_enter_pressed.connect(
-            lambda: self.execute_requested.emit(self.cellId)
-        )
+        if self._cell_model.cell_type == CellType.MARKDOWN:
+            self._editor.shift_enter_pressed.connect(self._onMarkdownShiftEnter)
+            self._editor.textChanged.connect(self._updateFoldButton)
+        else:
+            self._editor.shift_enter_pressed.connect(
+                lambda: self.execute_requested.emit(self.cellId)
+            )
         self._editor.textChanged.connect(
             lambda: self.source_changed.emit(self.cellId, self._editor.toPlainText())
         )
@@ -508,26 +616,51 @@ class CellWidget(QWidget):
             lambda: self.edit_mode_requested.emit(self.cellId)
         )
 
+    # #########################################################################################################################################
+    # Markdown rendering
 
-    # ------------------------------------------------------------------ Public API
+    def _onMarkdownShiftEnter(self) -> None:
+        if self._editor.toPlainText().strip():
+            self._renderMarkdown()
+        self.execute_requested.emit(self.cellId)
+
+    def _renderMarkdown(self) -> None:
+        import markdown as md_lib
+        source = self._editor.toPlainText()
+        html = md_lib.markdown(source, extensions=['tables', 'fenced_code'])
+        self._rendered_view.setHtml(_MD_CSS + html)
+        self._editor.setVisible(False)
+        self._rendered_view.setVisible(True)
+        self._rendered_view._adjustHeight()
+        self._is_rendered = True
+        self._updateFoldButton()
+
+    def _updateFoldButton(self) -> None:
+        if self._fold_btn is None:
+            return
+        level = _headingLevel(self._editor.toPlainText())
+        self._fold_btn.setVisible(level > 0)
+
+    def setFolded(self, folded: bool) -> None:
+        if self._fold_btn:
+            self._fold_btn.setText("▶" if folded else "▼")
+
+    # #########################################################################################################################################
+    # Public API
 
     def setExecutionCount(self, count: int | None) -> None:
-        if self._is_executing:
+        if self._prompt_label is None or self._is_executing:
             return
-        if count is not None:
-            self._prompt_label.setText(f"[{count}]:")
-        else:
-            self._prompt_label.setText("[ ]:")
+        self._prompt_label.setText(f"[{count}]:" if count is not None else "[ ]:")
 
     def setExecuting(self, executing: bool) -> None:
         self._is_executing = executing
         if executing:
-            self._prompt_label.setText("[*]:")
+            if self._prompt_label:
+                self._prompt_label.setText("[*]:")
             self._frame.setStyleSheet(_STYLE_EXECUTING)
         else:
             self._applyVisualMode()
-            # Execution count was updated in the model before this signal fired;
-            # read it directly so we don't depend on signal ordering.
             self.setExecutionCount(self._cell_model.execution_count)
 
     def setVisualMode(self, mode: str) -> None:
@@ -537,6 +670,14 @@ class CellWidget(QWidget):
             self._applyVisualMode()
 
     def _applyVisualMode(self) -> None:
+        if self._rendered_view is not None:
+            if self._visual_mode == "edit":
+                self._rendered_view.setVisible(False)
+                self._editor.setVisible(True)
+            elif self._is_rendered:
+                self._editor.setVisible(False)
+                self._rendered_view.setVisible(True)
+
         if self._visual_mode == "selected":
             self._frame.setStyleSheet(_STYLE_SELECTED)
         elif self._visual_mode == "edit":
@@ -546,16 +687,19 @@ class CellWidget(QWidget):
 
     def focusEditor(self) -> None:
         self._editor.setFocus()
-        # Move cursor to end so user can type immediately
         cursor = self._editor.textCursor()
         cursor.movePosition(cursor.MoveOperation.End)
         self._editor.setTextCursor(cursor)
 
     def appendOutput(self, output: OutputItem) -> None:
+        if self._output_area is None:
+            return
         self._output_area.appendOutput(output)
         self._output_area.setVisible(True)
 
     def clearOutputs(self) -> None:
+        if self._output_area is None:
+            return
         self._output_area.clear()
         self._output_area.setVisible(False)
 
@@ -571,3 +715,6 @@ class CellWidget(QWidget):
         self._editor.blockSignals(True)
         self._editor.setPlainText(source)
         self._editor.blockSignals(False)
+        if self._cell_model.cell_type == CellType.MARKDOWN and self._is_rendered:
+            self._renderMarkdown()
+        self._updateFoldButton()
