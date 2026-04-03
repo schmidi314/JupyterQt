@@ -51,7 +51,7 @@ class ConnectionDialog(QDialog):
         # Test button
         test_row = QHBoxLayout()
         self._test_btn = QPushButton("Test Connection")
-        self._test_btn.clicked.connect(self._test_connection)
+        self._test_btn.clicked.connect(self._testConnection)
         test_row.addWidget(self._test_btn)
         test_row.addStretch()
         layout.addLayout(test_row)
@@ -67,13 +67,13 @@ class ConnectionDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-    def get_config(self) -> ServerConfig:
+    def getConfig(self) -> ServerConfig:
         return ServerConfig(
             base_url=self._url_edit.text().rstrip("/"),
             token=self._token_edit.text().strip(),
         )
 
-    def set_status(self, result: str) -> None:
+    def setStatus(self, result: str) -> None:
         if result == "ok":
             self._status_label.setStyleSheet("color: green; font-weight: bold;")
             self._status_label.setText("Connected successfully.")
@@ -90,15 +90,15 @@ class ConnectionDialog(QDialog):
                 "Is the Jupyter server running?"
             )
 
-    def _test_connection(self) -> None:
+    def _testConnection(self) -> None:
         self._status_label.setStyleSheet("color: #555;")
         self._status_label.setText("Testing...")
         self._test_btn.setEnabled(False)
-        config = self.get_config()
+        config = self.getConfig()
         try:
             client = RestClient(config)
-            result = client.check_server()
+            result = client.checkServer()
         except Exception as e:
             result = f"error: {e}"
-        self.set_status(result)
+        self.setStatus(result)
         self._test_btn.setEnabled(True)

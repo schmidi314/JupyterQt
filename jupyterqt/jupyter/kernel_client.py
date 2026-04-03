@@ -24,11 +24,11 @@ class KernelClient(QObject):
     ws_disconnected = Signal()
     ws_error = Signal(str)
 
-    def __init__(self, kernel_id: str, notebook_id: str,
+    def __init__(self, kernel_id: str, notebookId: str,
                  config: ServerConfig, parent=None):
         super().__init__(parent)
         self.kernel_id = kernel_id
-        self.notebook_id = notebook_id
+        self.notebookId = notebookId
         self._config = config
         self._session_id = str(uuid.uuid4())
         self._tracker = ExecutionTracker()
@@ -37,28 +37,28 @@ class KernelClient(QObject):
         self._state = KernelStateMachine(self)
         self._state.status_changed.connect(self.kernel_status_changed)
         self._ws = KernelWebSocket(self)
-        self._ws.connected.connect(self._on_ws_connected)
-        self._ws.disconnected.connect(self._on_ws_disconnected)
-        self._ws.error_occurred.connect(self._on_ws_error)
-        self._ws.message_received.connect(self._on_message)
+        self._ws.connected.connect(self._onWsConnected)
+        self._ws.disconnected.connect(self._onWsDisconnected)
+        self._ws.error_occurred.connect(self._onWsError)
+        self._ws.message_received.connect(self._onMessage)
 
     @property
     def status(self) -> KernelStatus:
         return self._state.current
 
     def connect(self) -> None:
-        if self._ws.is_connected():
+        if self._ws.isConnected():
             return
-        self._state.force_transition(KernelStatus.CONNECTING)
+        self._state.forceTransition(KernelStatus.CONNECTING)
         token = self._config.token
-        url = (f"{self._config.ws_base_url}/api/kernels/{self.kernel_id}"
+        url = (f"{self._config.wsBaseUrl}/api/kernels/{self.kernel_id}"
                f"/channels?session_id={self._session_id}")
         if token:
             url += f"&token={token}"
-        self._ws.connect_to_kernel(url)
+        self._ws.connectToKernel(url)
 
     def disconnect(self) -> None:
-        self._ws.disconnect_from_kernel()
+        self._ws.disconnectFromKernel()
 
     def execute(self, cell: CellModel, code: str) -> str:
         msg = JupyterMessage.create(
@@ -74,8 +74,8 @@ class KernelClient(QObject):
             session=self._session_id,
             channel="shell",
         )
-        self._tracker.register(msg.msg_id, cell, self.notebook_id)
-        self._ws.send_message(msg.to_dict())
+        self._tracker.register(msg.msg_id, cell, self.notebookId)
+        self._ws.sendMessage(msg.toDict())
         return msg.msg_id
 
     def complete(self, code: str, cursor_pos: int) -> str:
@@ -86,7 +86,7 @@ class KernelClient(QObject):
             channel="shell",
         )
         self._pending_completions.add(msg.msg_id)
-        self._ws.send_message(msg.to_dict())
+        self._ws.sendMessage(msg.toDict())
         return msg.msg_id
 
     def inspect(self, code: str, cursor_pos: int, detail_level: int = 0) -> str:
@@ -98,36 +98,36 @@ class KernelClient(QObject):
             channel="shell",
         )
         self._pending_inspections.add(msg.msg_id)
-        self._ws.send_message(msg.to_dict())
+        self._ws.sendMessage(msg.toDict())
         return msg.msg_id
 
     def interrupt(self) -> None:
         # Kernel interrupt is done via REST; just cancel pending tracking
-        self._tracker.cancel_all_for_notebook(self.notebook_id)
+        self._tracker.cancelAllForNotebook(self.notebookId)
 
-    def is_connected(self) -> bool:
-        return self._ws.is_connected()
+    def isConnected(self) -> bool:
+        return self._ws.isConnected()
 
     @Slot()
-    def _on_ws_connected(self):
-        self._state.force_transition(KernelStatus.IDLE)
+    def _onWsConnected(self):
+        self._state.forceTransition(KernelStatus.IDLE)
         self.ws_connected.emit()
 
     @Slot()
-    def _on_ws_disconnected(self):
+    def _onWsDisconnected(self):
         if self._state.current != KernelStatus.RESTARTING:
-            self._state.force_transition(KernelStatus.DISCONNECTED)
+            self._state.forceTransition(KernelStatus.DISCONNECTED)
         self.ws_disconnected.emit()
 
     @Slot(str)
-    def _on_ws_error(self, msg: str):
-        self._state.force_transition(KernelStatus.ERROR)
+    def _onWsError(self, msg: str):
+        self._state.forceTransition(KernelStatus.ERROR)
         self.ws_error.emit(msg)
 
     @Slot(dict)
-    def _on_message(self, data: dict):
+    def _onMessage(self, data: dict):
         try:
-            msg = JupyterMessage.from_dict(data)
+            msg = JupyterMessage.fromDict(data)
         except Exception:
             return
 
@@ -138,7 +138,7 @@ class KernelClient(QObject):
             elif exec_state == "busy":
                 self._state.transition(KernelStatus.BUSY)
             elif exec_state == "restarting":
-                self._state.force_transition(KernelStatus.RESTARTING)
+                self._state.forceTransition(KernelStatus.RESTARTING)
             return
 
         parent_msg_id = msg.parent_header.get("msg_id", "")

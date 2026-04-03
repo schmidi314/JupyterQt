@@ -41,6 +41,6 @@ class KernelStateMachine(QObject):
         self.status_changed.emit(new_status)
         return True
 
-    def force_transition(self, new_status: KernelStatus) -> None:
+    def forceTransition(self, new_status: KernelStatus) -> None:
         self._current = new_status
         self.status_changed.emit(new_status)

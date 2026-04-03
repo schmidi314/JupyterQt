@@ -4,8 +4,8 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Signal
 
 _DEFAULTS = {
-    "input_font_size": 10,
-    "output_font_size": 10,
+    "inputFontSize": 10,
+    "outputFontSize": 10,
 }
 
 _SETTINGS_PATH = Path.home() / ".jupyter" / "qtj" / "settings.json"
@@ -31,28 +31,28 @@ class Settings(QObject):
     # ── input font size ───────────────────────────────────────────────
 
     @property
-    def input_font_size(self) -> int:
-        return self._data["input_font_size"]
+    def inputFontSize(self) -> int:
+        return self._data["inputFontSize"]
 
-    @input_font_size.setter
-    def input_font_size(self, size: int) -> None:
+    @inputFontSize.setter
+    def inputFontSize(self, size: int) -> None:
         size = max(6, min(size, 72))
-        if self._data["input_font_size"] != size:
-            self._data["input_font_size"] = size
+        if self._data["inputFontSize"] != size:
+            self._data["inputFontSize"] = size
             self._save()
             self.input_font_size_changed.emit(size)
 
     # ── output font size ──────────────────────────────────────────────
 
     @property
-    def output_font_size(self) -> int:
-        return self._data["output_font_size"]
+    def outputFontSize(self) -> int:
+        return self._data["outputFontSize"]
 
-    @output_font_size.setter
-    def output_font_size(self, size: int) -> None:
+    @outputFontSize.setter
+    def outputFontSize(self, size: int) -> None:
         size = max(6, min(size, 72))
-        if self._data["output_font_size"] != size:
-            self._data["output_font_size"] = size
+        if self._data["outputFontSize"] != size:
+            self._data["outputFontSize"] = size
             self._save()
             self.output_font_size_changed.emit(size)
 

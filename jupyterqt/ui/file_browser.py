@@ -37,7 +37,7 @@ class FileBrowserWidget(QWidget):
         ))
         new_dir_btn.setFixedWidth(28)
         new_dir_btn.setToolTip("New folder in current directory")
-        new_dir_btn.clicked.connect(self._on_new_folder)
+        new_dir_btn.clicked.connect(self._onNewFolder)
         refresh_btn = QPushButton("↻", self)
         refresh_btn.setFixedWidth(28)
         refresh_btn.setToolTip("Refresh")
@@ -51,33 +51,33 @@ class FileBrowserWidget(QWidget):
         self._tree = QTreeWidget(self)
         self._tree.setHeaderHidden(True)
         self._tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self._tree.itemDoubleClicked.connect(self._on_item_double_clicked)
-        self._tree.customContextMenuRequested.connect(self._on_context_menu)
+        self._tree.itemDoubleClicked.connect(self._onItemDoubleClicked)
+        self._tree.customContextMenuRequested.connect(self._onContextMenu)
         layout.addWidget(self._tree)
 
         self._current_path = ""
         QTimer.singleShot(0, self._refresh)
 
-    def update_config(self, config: ServerConfig) -> None:
+    def updateConfig(self, config: ServerConfig) -> None:
         self._config = config
-        self._rest.update_config(config)
+        self._rest.updateConfig(config)
         self._refresh()
 
     # ------------------------------------------------------------------ Refresh
 
     def _refresh(self) -> None:
-        w = RestWorker(self._rest.list_contents, self._current_path)
-        w.signals.finished.connect(self._on_contents_loaded)
-        w.signals.error.connect(self._on_load_error)
+        w = RestWorker(self._rest.listContents, self._current_path)
+        w.signals.finished.connect(self._onContentsLoaded)
+        w.signals.error.connect(self._onLoadError)
         self._pool.start(w)
 
-    def _on_load_error(self, error: str) -> None:
+    def _onLoadError(self, error: str) -> None:
         self._tree.clear()
         item = QTreeWidgetItem()
         item.setText(0, f"⚠ {error}")
         self._tree.addTopLevelItem(item)
 
-    def _on_contents_loaded(self, data: object) -> None:
+    def _onContentsLoaded(self, data: object) -> None:
         self._tree.clear()
         if not isinstance(data, dict):
             return
@@ -109,7 +109,7 @@ class FileBrowserWidget(QWidget):
 
     # ------------------------------------------------------------------ Navigation
 
-    def _on_item_double_clicked(self, item: QTreeWidgetItem, column: int) -> None:
+    def _onItemDoubleClicked(self, item: QTreeWidgetItem, column: int) -> None:
         data = item.data(0, Qt.ItemDataRole.UserRole)
         if not data:
             return
@@ -122,20 +122,20 @@ class FileBrowserWidget(QWidget):
 
     # ------------------------------------------------------------------ New folder
 
-    def _on_new_folder(self) -> None:
+    def _onNewFolder(self) -> None:
         name, ok = QInputDialog.getText(self, "New Folder", "Folder name:")
         if not ok or not name.strip():
             return
         name = name.strip()
         path = f"{self._current_path}/{name}" if self._current_path else name
-        w = RestWorker(self._rest.create_directory, path)
+        w = RestWorker(self._rest.createDirectory, path)
         w.signals.finished.connect(lambda _: self._refresh())
-        w.signals.error.connect(lambda e: self._show_error("Create folder failed", e))
+        w.signals.error.connect(lambda e: self._showError("Create folder failed", e))
         self._pool.start(w)
 
     # ------------------------------------------------------------------ Context menu
 
-    def _on_context_menu(self, pos) -> None:
+    def _onContextMenu(self, pos) -> None:
         item = self._tree.itemAt(pos)
         if not item:
             return
@@ -155,13 +155,13 @@ class FileBrowserWidget(QWidget):
         action = menu.exec(self._tree.viewport().mapToGlobal(pos))
 
         if action == rename_act:
-            self._rename_notebook(path, name)
+            self._renameNotebook(path, name)
         elif action == duplicate_act:
-            self._duplicate_notebook(path)
+            self._duplicateNotebook(path)
         elif action == delete_act:
-            self._delete_notebook(path, name)
+            self._deleteNotebook(path, name)
 
-    def _rename_notebook(self, path: str, current_name: str) -> None:
+    def _renameNotebook(self, path: str, current_name: str) -> None:
         new_name, ok = QInputDialog.getText(
             self, "Rename Notebook", "New name:", text=current_name
         )
@@ -172,18 +172,18 @@ class FileBrowserWidget(QWidget):
             new_name += ".ipynb"
         parent = path.rsplit("/", 1)[0] if "/" in path else ""
         new_path = f"{parent}/{new_name}" if parent else new_name
-        w = RestWorker(self._rest.rename_file, path, new_path)
+        w = RestWorker(self._rest.renameFile, path, new_path)
         w.signals.finished.connect(lambda _: self._refresh())
-        w.signals.error.connect(lambda e: self._show_error("Rename failed", e))
+        w.signals.error.connect(lambda e: self._showError("Rename failed", e))
         self._pool.start(w)
 
-    def _duplicate_notebook(self, path: str) -> None:
-        w = RestWorker(self._rest.copy_file, path)
+    def _duplicateNotebook(self, path: str) -> None:
+        w = RestWorker(self._rest.copyFile, path)
         w.signals.finished.connect(lambda _: self._refresh())
-        w.signals.error.connect(lambda e: self._show_error("Duplicate failed", e))
+        w.signals.error.connect(lambda e: self._showError("Duplicate failed", e))
         self._pool.start(w)
 
-    def _delete_notebook(self, path: str, name: str) -> None:
+    def _deleteNotebook(self, path: str, name: str) -> None:
         reply = QMessageBox.question(
             self, "Delete Notebook",
             f'Permanently delete "{name}"?',
@@ -191,10 +191,10 @@ class FileBrowserWidget(QWidget):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
-        w = RestWorker(self._rest.delete_file, path)
+        w = RestWorker(self._rest.deleteFile, path)
         w.signals.finished.connect(lambda _: self._refresh())
-        w.signals.error.connect(lambda e: self._show_error("Delete failed", e))
+        w.signals.error.connect(lambda e: self._showError("Delete failed", e))
         self._pool.start(w)
 
-    def _show_error(self, title: str, message: str) -> None:
+    def _showError(self, title: str, message: str) -> None:
         QMessageBox.warning(self, title, message)

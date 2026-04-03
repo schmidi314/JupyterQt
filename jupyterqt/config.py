@@ -7,7 +7,7 @@ class ServerConfig:
     token: str = ""
 
     @property
-    def ws_base_url(self) -> str:
+    def wsBaseUrl(self) -> str:
         return self.base_url.replace("http://", "ws://").replace("https://", "wss://")
 
     @property

@@ -16,7 +16,7 @@ class OutputArea(QWidget):
         # Track stream widgets per stream_name for appending
         self._stream_widgets: dict[str, TextRenderer] = {}
 
-    def append_output(self, output: OutputItem) -> None:
+    def appendOutput(self, output: OutputItem) -> None:
         widget = self._render(output)
         if widget:
             self._layout.addWidget(widget)
@@ -37,7 +37,7 @@ class OutputArea(QWidget):
             text = output.text or ""
             # Append to existing stream widget if same stream_name
             if name in self._stream_widgets:
-                self._stream_widgets[name].append_text(text)
+                self._stream_widgets[name].appendText(text)
                 return None
             w = TextRenderer(text, stream_name=name, parent=self)
             self._stream_widgets[name] = w

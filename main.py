@@ -42,10 +42,10 @@ def main():
     # before the event loop is running, causing dialog-in-dialog issues.
     from PySide6.QtCore import QTimer
     def _startup():
-        app_ctrl.check_server()
+        app_ctrl.checkServer()
         for arg in args:
             if arg.endswith(".ipynb"):
-                app_ctrl.open_notebook(arg)
+                app_ctrl.openNotebook(arg)
 
     QTimer.singleShot(0, _startup)
 

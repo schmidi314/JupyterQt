@@ -66,7 +66,7 @@ class _CompletionPopup(QFrame):
         self._list.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._list.setFrameStyle(0)
         self._list.setFont(parent_editor.font())
-        self._list.itemDoubleClicked.connect(self._on_double_click)
+        self._list.itemDoubleClicked.connect(self._onDoubleClick)
         layout.addWidget(self._list)
         self.setStyleSheet(
             "QFrame { background: white; border: 1px solid #aaaacc; }"
@@ -95,19 +95,19 @@ class _CompletionPopup(QFrame):
         self.move(global_pos)
         self.show()
 
-    def move_selection(self, delta: int) -> None:
+    def moveSelection(self, delta: int) -> None:
         row = max(0, min(self._list.currentRow() + delta, self._list.count() - 1))
         self._list.setCurrentRow(row)
 
-    def accept_current(self) -> tuple[str | None, int, int]:
+    def acceptCurrent(self) -> tuple[str | None, int, int]:
         item = self._list.currentItem()
         if item:
             return item.text(), self._cursor_start, self._cursor_end
         return None, 0, 0
 
-    def _on_double_click(self, item: QListWidgetItem) -> None:
+    def _onDoubleClick(self, item: QListWidgetItem) -> None:
         self.hide()
-        self._editor._apply_completion(item.text(), self._cursor_start, self._cursor_end)
+        self._editor._applyCompletion(item.text(), self._cursor_start, self._cursor_end)
         self._editor.setFocus()
 
 
@@ -136,9 +136,9 @@ class _InspectPopup(QFrame):
         )
         self.hide()
 
-    def show_content(self, mime_data: dict, cursor_global_pos, line_height: int) -> None:
+    def showContent(self, mime_data: dict, cursor_global_pos, line_height: int) -> None:
         from jupyterqt.settings import Settings
-        size = Settings.instance().output_font_size
+        size = Settings.instance().outputFontSize
 
 
 
@@ -149,9 +149,9 @@ class _InspectPopup(QFrame):
                 f'<div style="font-family:monospace; font-size:{size}pt">{html}</div>'
             )
         else:
-            from jupyterqt.ui.renderers.error_renderer import _ansi_to_html
+            from jupyterqt.ui.renderers.error_renderer import _ansiToHtml
             text = mime_data.get("text/plain", "")
-            html = _ansi_to_html(text).replace("\n", "<br>")
+            html = _ansiToHtml(text).replace("\n", "<br>")
             self._browser.setHtml(
                 f'<span style="font-family:monospace; font-size:{size}pt">{html}</span>'
             )
@@ -181,22 +181,22 @@ class _AutoHeightEditor(QPlainTextEdit):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.document().contentsChanged.connect(self._update_height)
-        self.horizontalScrollBar().valueChanged.connect(self._update_height)
+        self.document().contentsChanged.connect(self._updateHeight)
+        self.horizontalScrollBar().valueChanged.connect(self._updateHeight)
         self.horizontalScrollBar().setStyleSheet(
             "QScrollBar:horizontal { height: 8px; }"
         )
         from jupyterqt.settings import Settings
-        Settings.instance().input_font_size_changed.connect(self._on_font_size_changed)
+        Settings.instance().input_font_size_changed.connect(self._onFontSizeChanged)
 
-    def _on_font_size_changed(self, size: int) -> None:
+    def _onFontSizeChanged(self, size: int) -> None:
         f = self.font()
         f.setPointSize(size)
         self.setFont(f)
         self.setTabStopDistance(4 * self.fontMetrics().horizontalAdvance(' '))
-        self._update_height()
+        self._updateHeight()
 
-    def _update_height(self):
+    def _updateHeight(self):
         fm = self.fontMetrics()
         n = max(1, self.document().blockCount())
         doc_margin = self.document().documentMargin()
@@ -225,7 +225,7 @@ class _CodeEditor(_AutoHeightEditor):
     def __init__(self, parent=None):
         super().__init__(parent)
         from jupyterqt.settings import Settings
-        font = QFont("Monospace", Settings.instance().input_font_size)
+        font = QFont("Monospace", Settings.instance().inputFontSize)
         font.setStyleHint(QFont.StyleHint.TypeWriter)
         self.setFont(font)
         self.setTabStopDistance(4 * self.fontMetrics().horizontalAdvance(' '))
@@ -236,17 +236,17 @@ class _CodeEditor(_AutoHeightEditor):
         )
         self._highlighter = _PythonHighlighter(self.document())
         self._popup = _CompletionPopup(self)
-        self._completion_provider = None   # set via set_completion_provider()
+        self._completion_provider = None   # set via setCompletionProvider()
         self._completion_seq = 0           # guards against stale async replies
         self._inspect_popup = _InspectPopup(self)
-        self._inspection_provider = None   # set via set_inspection_provider()
+        self._inspection_provider = None   # set via setInspectionProvider()
         self._last_inspect_detail = -1     # tracks detail_level of current popup
 
-    def set_completion_provider(self, fn) -> None:
+    def setCompletionProvider(self, fn) -> None:
         """fn(code, cursor_pos, callback) — provided by NotebookController."""
         self._completion_provider = fn
 
-    def set_inspection_provider(self, fn) -> None:
+    def setInspectionProvider(self, fn) -> None:
         """fn(code, cursor_pos, callback) — provided by NotebookController."""
         self._inspection_provider = fn
 
@@ -275,9 +275,9 @@ class _CodeEditor(_AutoHeightEditor):
         #            third press → dismiss
         if key == Qt.Key.Key_Backtab:
             if not self._inspect_popup.isVisible():
-                self._trigger_inspection(detail_level=0)
+                self._triggerInspection(detail_level=0)
             elif self._last_inspect_detail == 0:
-                self._trigger_inspection(detail_level=1)
+                self._triggerInspection(detail_level=1)
             else:
                 self._inspect_popup.hide()
                 self._last_inspect_detail = -1
@@ -292,28 +292,28 @@ class _CodeEditor(_AutoHeightEditor):
 
         if self._popup.isVisible():
             if key == Qt.Key.Key_Up:
-                self._popup.move_selection(-1)
+                self._popup.moveSelection(-1)
                 return
             if key == Qt.Key.Key_Down:
-                self._popup.move_selection(1)
+                self._popup.moveSelection(1)
                 return
             if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Tab):
-                match, start, end = self._popup.accept_current()
+                match, start, end = self._popup.acceptCurrent()
                 self._popup.hide()
                 if match is not None:
-                    self._apply_completion(match, start, end)
+                    self._applyCompletion(match, start, end)
                 return
             if key == Qt.Key.Key_Escape:
                 self._popup.hide()
                 return
             # Any other key: pass through, then re-trigger
             super().keyPressEvent(event)
-            self._trigger_completion(retrigger=True)
+            self._triggerCompletion(retrigger=True)
             return
 
         # Ctrl+Space always triggers completion
         if key == Qt.Key.Key_Space and mods & Qt.KeyboardModifier.ControlModifier:
-            self._trigger_completion(retrigger=False)
+            self._triggerCompletion(retrigger=False)
             return
 
         if key == Qt.Key.Key_Tab:
@@ -322,7 +322,7 @@ class _CodeEditor(_AutoHeightEditor):
             line_text = cursor.block().text()
             if (self._completion_provider and col > 0 and
                     (line_text[col - 1].isalnum() or line_text[col - 1] in ('_', '.'))):
-                self._trigger_completion(retrigger=False)
+                self._triggerCompletion(retrigger=False)
                 # Popup will appear asynchronously; don't insert spaces yet.
                 # If no provider or no completions arrive, fall through on next Tab.
                 return
@@ -331,7 +331,7 @@ class _CodeEditor(_AutoHeightEditor):
 
         super().keyPressEvent(event)
 
-    def _trigger_completion(self, *, retrigger: bool) -> None:
+    def _triggerCompletion(self, *, retrigger: bool) -> None:
         if not self._completion_provider:
             return
         self._completion_seq += 1
@@ -340,10 +340,10 @@ class _CodeEditor(_AutoHeightEditor):
         cursor_pos = self.textCursor().position()
         self._completion_provider(
             code, cursor_pos,
-            lambda matches, cs, ce: self._on_completions(matches, cs, ce, seq),
+            lambda matches, cs, ce: self._onCompletions(matches, cs, ce, seq),
         )
 
-    def _on_completions(self, matches: list, cursor_start: int,
+    def _onCompletions(self, matches: list, cursor_start: int,
                         cursor_end: int, seq: int) -> None:
         if seq != self._completion_seq:
             return   # stale reply
@@ -354,7 +354,7 @@ class _CodeEditor(_AutoHeightEditor):
         global_pos = self.mapToGlobal(cursor_rect.bottomLeft())
         self._popup.populate(matches, cursor_start, cursor_end, global_pos)
 
-    def _trigger_inspection(self, detail_level: int = 0) -> None:
+    def _triggerInspection(self, detail_level: int = 0) -> None:
         if not self._inspection_provider:
             return
         self._last_inspect_detail = detail_level
@@ -362,19 +362,19 @@ class _CodeEditor(_AutoHeightEditor):
         cursor_pos = self.textCursor().position()
         self._inspection_provider(
             code, cursor_pos,
-            lambda data: self._on_inspection(data, detail_level),
+            lambda data: self._onInspection(data, detail_level),
             detail_level,
         )
 
-    def _on_inspection(self, mime_data: dict, detail_level: int) -> None:
+    def _onInspection(self, mime_data: dict, detail_level: int) -> None:
         if detail_level != self._last_inspect_detail:
             return   # stale reply
         cursor_rect = self.cursorRect()
         global_pos = self.mapToGlobal(cursor_rect.topLeft())
         line_h = self.fontMetrics().lineSpacing()
-        self._inspect_popup.show_content(mime_data, global_pos, line_h)
+        self._inspect_popup.showContent(mime_data, global_pos, line_h)
 
-    def _apply_completion(self, match: str, cursor_start: int,
+    def _applyCompletion(self, match: str, cursor_start: int,
                           cursor_end: int) -> None:
         from PySide6.QtGui import QTextCursor
         cursor = self.textCursor()
@@ -388,7 +388,7 @@ class _MarkdownEditor(_AutoHeightEditor):
     def __init__(self, parent=None):
         super().__init__(parent)
         from jupyterqt.settings import Settings
-        font = QFont("Monospace", Settings.instance().input_font_size)
+        font = QFont("Monospace", Settings.instance().inputFontSize)
         font.setStyleHint(QFont.StyleHint.TypeWriter)
         self.setFont(font)
         self.setStyleSheet(
@@ -418,32 +418,32 @@ _STYLE_EXECUTING = (
 
 
 class CellWidget(QWidget):
-    source_changed = Signal(str, str)       # cell_id, source
-    execute_requested = Signal(str)         # cell_id
-    delete_requested = Signal(str)          # cell_id
-    add_above_requested = Signal(str)       # cell_id
-    add_below_requested = Signal(str)       # cell_id
-    move_up_requested = Signal(str)         # cell_id
-    move_down_requested = Signal(str)       # cell_id
+    source_changed = Signal(str, str)       # cellId, source
+    execute_requested = Signal(str)         # cellId
+    delete_requested = Signal(str)          # cellId
+    add_above_requested = Signal(str)       # cellId
+    add_below_requested = Signal(str)       # cellId
+    move_up_requested = Signal(str)         # cellId
+    move_down_requested = Signal(str)       # cellId
     # Mode signals (for NotebookTab)
-    edit_mode_requested = Signal(str)       # cell_id — editor got focus
-    escape_pressed = Signal(str)            # cell_id — Esc in editor
+    edit_mode_requested = Signal(str)       # cellId — editor got focus
+    escape_pressed = Signal(str)            # cellId — Esc in editor
 
     def __init__(self, cell_model: CellModel, parent=None):
         super().__init__(parent)
         self._cell_model = cell_model
         self._is_executing = False
         self._visual_mode = "normal"   # "normal" | "selected" | "edit"
-        self._setup_ui()
-        self._connect_signals()
+        self._setupUi()
+        self._connectSignals()
 
     @property
-    def cell_id(self) -> str:
-        return self._cell_model.cell_id
+    def cellId(self) -> str:
+        return self._cell_model.cellId
 
     # ------------------------------------------------------------------ UI
 
-    def _setup_ui(self):
+    def _setupUi(self):
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 2, 0, 2)
         outer.setSpacing(0)
@@ -476,7 +476,7 @@ class CellWidget(QWidget):
             self._prompt_label.setText("Md:")
 
         self._editor.setPlainText(self._cell_model.source)
-        self._editor._update_height()
+        self._editor._updateHeight()
         top_row.addWidget(self._prompt_label)
         top_row.addWidget(self._editor, 1)
         frame_layout.addLayout(top_row)
@@ -488,30 +488,30 @@ class CellWidget(QWidget):
         outer.addWidget(self._frame)
 
         for o in self._cell_model.outputs:
-            self._output_area.append_output(o)
+            self._output_area.appendOutput(o)
         if self._cell_model.outputs:
             self._output_area.setVisible(True)
 
-        self.set_execution_count(self._cell_model.execution_count)
+        self.setExecutionCount(self._cell_model.execution_count)
 
-    def _connect_signals(self):
+    def _connectSignals(self):
         self._editor.shift_enter_pressed.connect(
-            lambda: self.execute_requested.emit(self.cell_id)
+            lambda: self.execute_requested.emit(self.cellId)
         )
         self._editor.textChanged.connect(
-            lambda: self.source_changed.emit(self.cell_id, self._editor.toPlainText())
+            lambda: self.source_changed.emit(self.cellId, self._editor.toPlainText())
         )
         self._editor.escape_pressed.connect(
-            lambda: self.escape_pressed.emit(self.cell_id)
+            lambda: self.escape_pressed.emit(self.cellId)
         )
         self._editor.focused.connect(
-            lambda: self.edit_mode_requested.emit(self.cell_id)
+            lambda: self.edit_mode_requested.emit(self.cellId)
         )
 
 
     # ------------------------------------------------------------------ Public API
 
-    def set_execution_count(self, count: int | None) -> None:
+    def setExecutionCount(self, count: int | None) -> None:
         if self._is_executing:
             return
         if count is not None:
@@ -519,24 +519,24 @@ class CellWidget(QWidget):
         else:
             self._prompt_label.setText("[ ]:")
 
-    def set_executing(self, executing: bool) -> None:
+    def setExecuting(self, executing: bool) -> None:
         self._is_executing = executing
         if executing:
             self._prompt_label.setText("[*]:")
             self._frame.setStyleSheet(_STYLE_EXECUTING)
         else:
-            self._apply_visual_mode()
+            self._applyVisualMode()
             # Execution count was updated in the model before this signal fired;
             # read it directly so we don't depend on signal ordering.
-            self.set_execution_count(self._cell_model.execution_count)
+            self.setExecutionCount(self._cell_model.execution_count)
 
-    def set_visual_mode(self, mode: str) -> None:
+    def setVisualMode(self, mode: str) -> None:
         """mode: 'normal' | 'selected' | 'edit'"""
         self._visual_mode = mode
         if not self._is_executing:
-            self._apply_visual_mode()
+            self._applyVisualMode()
 
-    def _apply_visual_mode(self) -> None:
+    def _applyVisualMode(self) -> None:
         if self._visual_mode == "selected":
             self._frame.setStyleSheet(_STYLE_SELECTED)
         elif self._visual_mode == "edit":
@@ -544,30 +544,30 @@ class CellWidget(QWidget):
         else:
             self._frame.setStyleSheet(_STYLE_NORMAL)
 
-    def focus_editor(self) -> None:
+    def focusEditor(self) -> None:
         self._editor.setFocus()
         # Move cursor to end so user can type immediately
         cursor = self._editor.textCursor()
         cursor.movePosition(cursor.MoveOperation.End)
         self._editor.setTextCursor(cursor)
 
-    def append_output(self, output: OutputItem) -> None:
-        self._output_area.append_output(output)
+    def appendOutput(self, output: OutputItem) -> None:
+        self._output_area.appendOutput(output)
         self._output_area.setVisible(True)
 
-    def clear_outputs(self) -> None:
+    def clearOutputs(self) -> None:
         self._output_area.clear()
         self._output_area.setVisible(False)
 
-    def set_completion_provider(self, fn) -> None:
+    def setCompletionProvider(self, fn) -> None:
         if isinstance(self._editor, _CodeEditor):
-            self._editor.set_completion_provider(fn)
+            self._editor.setCompletionProvider(fn)
 
-    def set_inspection_provider(self, fn) -> None:
+    def setInspectionProvider(self, fn) -> None:
         if isinstance(self._editor, _CodeEditor):
-            self._editor.set_inspection_provider(fn)
+            self._editor.setInspectionProvider(fn)
 
-    def set_source(self, source: str) -> None:
+    def setSource(self, source: str) -> None:
         self._editor.blockSignals(True)
         self._editor.setPlainText(source)
         self._editor.blockSignals(False)

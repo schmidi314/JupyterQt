@@ -20,7 +20,7 @@ class OutputItem:
 
 @dataclass
 class CellModel:
-    cell_id: str
+    cellId: str
     cell_type: CellType
     source: str
     outputs: list[OutputItem] = field(default_factory=list)
@@ -30,13 +30,13 @@ class CellModel:
     @staticmethod
     def new(cell_type: CellType = CellType.CODE) -> "CellModel":
         return CellModel(
-            cell_id=str(uuid.uuid4()),
+            cellId=str(uuid.uuid4()),
             cell_type=cell_type,
             source="",
         )
 
     @staticmethod
-    def from_ipynb_cell(data: dict) -> "CellModel":
+    def fromIpynbCell(data: dict) -> "CellModel":
         cell_type = CellType(data.get("cell_type", "code"))
         source = data.get("source", "")
         if isinstance(source, list):
@@ -68,9 +68,9 @@ class CellModel:
                     metadata={},
                 ))
 
-        cell_id = data.get("id", str(uuid.uuid4()))
+        cellId = data.get("id", str(uuid.uuid4()))
         return CellModel(
-            cell_id=cell_id,
+            cellId=cellId,
             cell_type=cell_type,
             source=source,
             outputs=outputs,
@@ -78,19 +78,19 @@ class CellModel:
             metadata=data.get("metadata", {}),
         )
 
-    def to_ipynb_cell(self) -> dict:
+    def toIpynbCell(self) -> dict:
         d: dict = {
-            "id": self.cell_id,
+            "id": self.cellId,
             "cell_type": self.cell_type.value,
             "source": self.source,
             "metadata": self.metadata,
         }
         if self.cell_type == CellType.CODE:
             d["execution_count"] = self.execution_count
-            d["outputs"] = [self._output_to_dict(o) for o in self.outputs]
+            d["outputs"] = [self._outputToDict(o) for o in self.outputs]
         return d
 
-    def _output_to_dict(self, o: OutputItem) -> dict:
+    def _outputToDict(self, o: OutputItem) -> dict:
         if o.output_type == "stream":
             return {"output_type": "stream", "name": "stdout",
                     "text": o.text or "", "metadata": o.metadata}

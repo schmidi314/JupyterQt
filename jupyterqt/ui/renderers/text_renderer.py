@@ -13,10 +13,10 @@ class TextRenderer(QTextEdit):
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         from jupyterqt.settings import Settings
-        font = QFont("Monospace", Settings.instance().output_font_size)
+        font = QFont("Monospace", Settings.instance().outputFontSize)
         font.setStyleHint(QFont.StyleHint.TypeWriter)
         self.setFont(font)
-        Settings.instance().output_font_size_changed.connect(self._on_font_size_changed)
+        Settings.instance().output_font_size_changed.connect(self._onFontSizeChanged)
 
         if stream_name == "stderr":
             self.setStyleSheet("QTextEdit { color: #cc0000; background: transparent; border: none; }")
@@ -24,9 +24,9 @@ class TextRenderer(QTextEdit):
             self.setStyleSheet("QTextEdit { background: transparent; border: none; }")
 
         self.setPlainText(text)
-        self._adjust_height()
+        self._adjustHeight()
 
-    def _adjust_height(self):
+    def _adjustHeight(self):
         doc = self.document()
         doc.setTextWidth(self.width() if self.width() > 0 else 600)
         height = int(doc.size().height()) + 4
@@ -34,17 +34,17 @@ class TextRenderer(QTextEdit):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self._adjust_height()
+        self._adjustHeight()
 
-    def _on_font_size_changed(self, size: int) -> None:
+    def _onFontSizeChanged(self, size: int) -> None:
         f = self.font()
         f.setPointSize(size)
         self.setFont(f)
-        self._adjust_height()
+        self._adjustHeight()
 
-    def append_text(self, text: str) -> None:
+    def appendText(self, text: str) -> None:
         cursor = self.textCursor()
         cursor.movePosition(cursor.MoveOperation.End)
         cursor.insertText(text)
         self.setTextCursor(cursor)
-        self._adjust_height()
+        self._adjustHeight()

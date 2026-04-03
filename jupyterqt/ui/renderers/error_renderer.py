@@ -19,17 +19,17 @@ _ANSI_COLORS = {
 _ANSI_PATTERN = re.compile(r'\x1b\[([0-9;]*)m')
 
 
-def _ansi_to_html(text: str) -> str:
+def _ansiToHtml(text: str) -> str:
     result = []
     last_end = 0
     open_span = False
 
-    def escape_html(s: str) -> str:
+    def escapeHtml(s: str) -> str:
         return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
     for match in _ANSI_PATTERN.finditer(text):
         # Add text before this escape
-        before = escape_html(text[last_end:match.start()])
+        before = escapeHtml(text[last_end:match.start()])
         result.append(before)
         last_end = match.end()
 
@@ -44,7 +44,7 @@ def _ansi_to_html(text: str) -> str:
             result.append(f'<span style="color:{_ANSI_COLORS[code]}">')
             open_span = True
 
-    result.append(escape_html(text[last_end:]))
+    result.append(escapeHtml(text[last_end:]))
     if open_span:
         result.append("</span>")
     return "".join(result)
@@ -56,10 +56,10 @@ class ErrorRenderer(QTextEdit):
         self.setReadOnly(True)
         self.setFrameStyle(0)
         from jupyterqt.settings import Settings
-        font = QFont("Monospace", Settings.instance().output_font_size)
+        font = QFont("Monospace", Settings.instance().outputFontSize)
         font.setStyleHint(QFont.StyleHint.TypeWriter)
         self.setFont(font)
-        Settings.instance().output_font_size_changed.connect(self._on_font_size_changed)
+        Settings.instance().output_font_size_changed.connect(self._onFontSizeChanged)
         self.setStyleSheet(
             "QTextEdit { background: #fff0f0; border: 1px solid #ffcccc; "
             "border-radius: 3px; padding: 4px; }"
@@ -74,18 +74,18 @@ class ErrorRenderer(QTextEdit):
             f'<span style="color:#cc0000">{evalue}</span><br>'
         ]
         for line in traceback_lines:
-            html_parts.append(_ansi_to_html(line) + "<br>")
+            html_parts.append(_ansiToHtml(line) + "<br>")
 
         self.setHtml("".join(html_parts))
-        self._adjust_height()
+        self._adjustHeight()
 
-    def _on_font_size_changed(self, size: int) -> None:
+    def _onFontSizeChanged(self, size: int) -> None:
         f = self.font()
         f.setPointSize(size)
         self.setFont(f)
-        self._adjust_height()
+        self._adjustHeight()
 
-    def _adjust_height(self):
+    def _adjustHeight(self):
         doc = self.document()
         doc.setTextWidth(self.width() if self.width() > 0 else 600)
         height = int(doc.size().height()) + 8
@@ -93,4 +93,4 @@ class ErrorRenderer(QTextEdit):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self._adjust_height()
+        self._adjustHeight()

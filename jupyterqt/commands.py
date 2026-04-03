@@ -40,7 +40,7 @@ class CommandRegistry:
         """Remove a single command; silently ignored if not found."""
         self._commands.pop((context, command), None)
 
-    def unregister_context(self, context: str) -> None:
+    def unregisterContext(self, context: str) -> None:
         """Remove all commands for a given context (e.g. on notebook close)."""
         keys = [k for k in self._commands if k[0] == context]
         for k in keys:
@@ -51,10 +51,10 @@ class CommandRegistry:
     def get(self, context: str, command: str) -> Command | None:
         return self._commands.get((context, command))
 
-    def commands_for_context(self, context: str) -> list[Command]:
+    def commandsForContext(self, context: str) -> list[Command]:
         return [c for c in self._commands.values() if c.context == context]
 
-    def all_commands(self) -> list[Command]:
+    def allCommands(self) -> list[Command]:
         return list(self._commands.values())
 
     # ------------------------------------------------------------------ execution

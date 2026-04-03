@@ -20,14 +20,14 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("JupyterQt")
         self.resize(1300, 850)
 
-        self._build_ui()
-        self._build_menu()
-        self._build_toolbar()
-        self._connect_app()
+        self._buildUi()
+        self._buildMenu()
+        self._buildToolbar()
+        self._connectApp()
 
     # ------------------------------------------------------------------ UI
 
-    def _build_ui(self) -> None:
+    def _buildUi(self) -> None:
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
         self.setCentralWidget(splitter)
 
@@ -35,14 +35,14 @@ class MainWindow(QMainWindow):
         self._file_browser = FileBrowserWidget(self._app.config, self)
         self._file_browser.setMinimumWidth(160)
         self._file_browser.setMaximumWidth(280)
-        self._file_browser.notebook_selected.connect(self._on_open_notebook)
-        self._file_browser.new_notebook_requested.connect(self._on_new_notebook)
+        self._file_browser.notebook_selected.connect(self._onOpenNotebook)
+        self._file_browser.new_notebook_requested.connect(self._onNewNotebook)
         splitter.addWidget(self._file_browser)
 
         # Right: workspace (panes + splits)
         self._workspace = WorkspaceWidget(self)
         self._workspace.active_controller_changed.connect(
-            self._on_active_controller_changed
+            self._onActiveControllerChanged
         )
         splitter.addWidget(self._workspace)
         splitter.setStretchFactor(1, 1)
@@ -53,18 +53,18 @@ class MainWindow(QMainWindow):
         self._status_label = QLabel("Not connected", self)
         self._status_bar.addWidget(self._status_label)
 
-    def _build_menu(self) -> None:
+    def _buildMenu(self) -> None:
         menubar = self.menuBar()
 
         # File
         file_menu = menubar.addMenu("&File")
         self._action_connect = QAction("&Connect to Server…", self)
-        self._action_connect.triggered.connect(self._show_connection_dialog)
+        self._action_connect.triggered.connect(self._showConnectionDialog)
         file_menu.addAction(self._action_connect)
         file_menu.addSeparator()
         self._action_save = QAction("&Save Notebook", self)
         self._action_save.setShortcut(QKeySequence.StandardKey.Save)
-        self._action_save.triggered.connect(self._save_current)
+        self._action_save.triggered.connect(self._saveCurrent)
         file_menu.addAction(self._action_save)
         file_menu.addSeparator()
         self._action_quit = QAction("&Quit", self)
@@ -75,50 +75,50 @@ class MainWindow(QMainWindow):
         # Edit
         edit_menu = menubar.addMenu("&Edit")
         a = QAction("Add Code Cell Below", self)
-        a.triggered.connect(lambda: self._add_cell("code"))
+        a.triggered.connect(lambda: self._addCell("code"))
         edit_menu.addAction(a)
         a = QAction("Add Markdown Cell Below", self)
-        a.triggered.connect(lambda: self._add_cell("markdown"))
+        a.triggered.connect(lambda: self._addCell("markdown"))
         edit_menu.addAction(a)
 
         # View
         view_menu = menubar.addMenu("&View")
         self._action_split_h = QAction("Split Pane &Horizontally", self)
         self._action_split_h.setShortcut("Ctrl+\\")
-        self._action_split_h.triggered.connect(self._split_h)
+        self._action_split_h.triggered.connect(self._splitH)
         view_menu.addAction(self._action_split_h)
         self._action_split_v = QAction("Split Pane &Vertically", self)
         self._action_split_v.setShortcut("Ctrl+Shift+\\")
-        self._action_split_v.triggered.connect(self._split_v)
+        self._action_split_v.triggered.connect(self._splitV)
         view_menu.addAction(self._action_split_v)
         view_menu.addSeparator()
         self._action_new_view = QAction("Open &New View of Notebook", self)
-        self._action_new_view.triggered.connect(self._open_new_view)
+        self._action_new_view.triggered.connect(self._openNewView)
         view_menu.addAction(self._action_new_view)
 
         # Kernel
         kernel_menu = menubar.addMenu("&Kernel")
         self._action_run_all = QAction("Run &All Cells", self)
         self._action_run_all.setShortcut("Ctrl+Shift+Return")
-        self._action_run_all.triggered.connect(self._run_all_cells)
+        self._action_run_all.triggered.connect(self._runAllCells)
         kernel_menu.addAction(self._action_run_all)
         kernel_menu.addSeparator()
         self._action_interrupt = QAction("&Interrupt Kernel", self)
         self._action_interrupt.setShortcut("Ctrl+.")
-        self._action_interrupt.triggered.connect(self._interrupt_kernel)
+        self._action_interrupt.triggered.connect(self._interruptKernel)
         kernel_menu.addAction(self._action_interrupt)
         self._action_restart = QAction("&Restart Kernel", self)
-        self._action_restart.triggered.connect(self._restart_kernel)
+        self._action_restart.triggered.connect(self._restartKernel)
         kernel_menu.addAction(self._action_restart)
         self._action_restart_run = QAction("Restart && Run All", self)
-        self._action_restart_run.triggered.connect(self._restart_and_run_all)
+        self._action_restart_run.triggered.connect(self._restartAndRunAll)
         kernel_menu.addAction(self._action_restart_run)
         kernel_menu.addSeparator()
         self._action_shutdown = QAction("&Shutdown Kernel", self)
-        self._action_shutdown.triggered.connect(self._shutdown_kernel)
+        self._action_shutdown.triggered.connect(self._shutdownKernel)
         kernel_menu.addAction(self._action_shutdown)
 
-    def _build_toolbar(self) -> None:
+    def _buildToolbar(self) -> None:
         tb = QToolBar("Main", self)
         tb.setMovable(False)
         self.addToolBar(tb)
@@ -132,23 +132,23 @@ class MainWindow(QMainWindow):
         tb.addAction(self._action_split_v)
         tb.addAction(self._action_new_view)
 
-    def _connect_app(self) -> None:
-        self._app.notebook_opened.connect(self._on_notebook_opened)
+    def _connectApp(self) -> None:
+        self._app.notebook_opened.connect(self._onNotebookOpened)
         self._app.notebook_created.connect(self._file_browser._refresh)
-        self._app.server_checked.connect(self._on_server_checked)
+        self._app.server_checked.connect(self._onServerChecked)
 
     # ------------------------------------------------------------------ Slots
 
-    def _on_open_notebook(self, path: str) -> None:
-        self._app.open_notebook(path)
+    def _onOpenNotebook(self, path: str) -> None:
+        self._app.openNotebook(path)
 
-    def _on_notebook_opened(self, _notebook_id: str,
+    def _onNotebookOpened(self, _notebook_id: str,
                              ctrl: NotebookController) -> None:
-        self._workspace.open_notebook(ctrl)
+        self._workspace.openNotebook(ctrl)
 
-    def _on_active_controller_changed(self,
+    def _onActiveControllerChanged(self,
                                        ctrl: NotebookController | None) -> None:
-        self._app.set_active_notebook(ctrl)
+        self._app.setActiveNotebook(ctrl)
         if ctrl:
             self.setWindowTitle(
                 f"JupyterQt — {ctrl.path.split('/')[-1]}"
@@ -156,104 +156,104 @@ class MainWindow(QMainWindow):
         else:
             self.setWindowTitle("JupyterQt")
 
-    def _on_server_checked(self, result: str) -> None:
+    def _onServerChecked(self, result: str) -> None:
         if result == "ok":
             self._status_label.setText(
                 f"Connected to {self._app.config.base_url}"
             )
-            self._file_browser.update_config(self._app.config)
+            self._file_browser.updateConfig(self._app.config)
         elif result == "unauthorized":
             self._status_label.setText(
                 "Server reachable but token is wrong — use File > Connect to Server"
             )
-            self._show_connection_dialog(status=result)
+            self._showConnectionDialog(status=result)
         else:
             self._status_label.setText(
                 f"Cannot reach server ({result}) — use File > Connect to Server"
             )
-            self._show_connection_dialog(status=result)
+            self._showConnectionDialog(status=result)
 
     # ------------------------------------------------------------------ Actions
 
-    def _current_controller(self) -> NotebookController | None:
-        return self._workspace.current_controller()
+    def _currentController(self) -> NotebookController | None:
+        return self._workspace.currentController()
 
-    def _save_current(self) -> None:
-        ctrl = self._current_controller()
+    def _saveCurrent(self) -> None:
+        ctrl = self._currentController()
         if ctrl:
             ctrl.save()
 
-    def _run_all_cells(self) -> None:
-        ctrl = self._current_controller()
+    def _runAllCells(self) -> None:
+        ctrl = self._currentController()
         if ctrl:
-            ctrl.execute_all_cells()
+            ctrl.executeAllCells()
 
-    def _interrupt_kernel(self) -> None:
-        ctrl = self._current_controller()
+    def _interruptKernel(self) -> None:
+        ctrl = self._currentController()
         if ctrl:
-            ctrl.interrupt_kernel()
+            ctrl.interruptKernel()
 
-    def _restart_kernel(self) -> None:
-        ctrl = self._current_controller()
+    def _restartKernel(self) -> None:
+        ctrl = self._currentController()
         if ctrl:
-            ctrl.restart_kernel()
+            ctrl.restartKernel()
 
-    def _restart_and_run_all(self) -> None:
-        ctrl = self._current_controller()
+    def _restartAndRunAll(self) -> None:
+        ctrl = self._currentController()
         if not ctrl:
             return
-        ctrl.restart_kernel()
+        ctrl.restartKernel()
         # Run all once kernel goes idle
-        def _on_status(status, c=ctrl):
+        def _onStatus(status, c=ctrl):
             if status == KernelStatus.IDLE:
-                c.kernel_status_changed.disconnect(_on_status)
-                c.execute_all_cells()
-        ctrl.kernel_status_changed.connect(_on_status)
+                c.kernel_status_changed.disconnect(_onStatus)
+                c.executeAllCells()
+        ctrl.kernel_status_changed.connect(_onStatus)
 
-    def _shutdown_kernel(self) -> None:
-        ctrl = self._current_controller()
+    def _shutdownKernel(self) -> None:
+        ctrl = self._currentController()
         if ctrl:
-            ctrl.shutdown_kernel()
+            ctrl.shutdownKernel()
 
-    def _add_cell(self, cell_type_str: str) -> None:
+    def _addCell(self, cell_type_str: str) -> None:
         from jupyterqt.models.cell_model import CellType
-        ctrl = self._current_controller()
+        ctrl = self._currentController()
         if ctrl:
             ct = CellType.CODE if cell_type_str == "code" else CellType.MARKDOWN
-            ctrl.add_cell(ct)
+            ctrl.addCell(ct)
 
-    def _split_h(self) -> None:
+    def _splitH(self) -> None:
         if self._workspace._active_pane:
             self._workspace._split(
                 self._workspace._active_pane, Qt.Orientation.Horizontal
             )
 
-    def _split_v(self) -> None:
+    def _splitV(self) -> None:
         if self._workspace._active_pane:
             self._workspace._split(
                 self._workspace._active_pane, Qt.Orientation.Vertical
             )
 
-    def _open_new_view(self) -> None:
-        ctrl = self._current_controller()
+    def _openNewView(self) -> None:
+        ctrl = self._currentController()
         if ctrl:
-            self._workspace.open_notebook_in_new_view(ctrl)
+            self._workspace.openNotebookInNewView(ctrl)
 
-    def _on_new_notebook(self, directory: str) -> None:
-        self._app.create_notebook(directory)
+    def _onNewNotebook(self, directory: str) -> None:
+        self._app.createNotebook(directory)
 
-    def _show_connection_dialog(self, status: str | None = None) -> None:
+    def _showConnectionDialog(self, status: str | None = None) -> None:
         dlg = ConnectionDialog(self._app.config, self)
         if status:
-            dlg.set_status(status)
+            dlg.setStatus(status)
         if dlg.exec() == ConnectionDialog.DialogCode.Accepted:
-            config = dlg.get_config()
-            self._app.update_config(config)
-            self._app.check_server()
+            config = dlg.getConfig()
+            self._app.updateConfig(config)
+            self._app.checkServer()
 
     # ------------------------------------------------------------------ Overrides
 
     def closeEvent(self, event) -> None:
-        for ctrl in self._app.all_notebooks():
+        for ctrl in self._app.allNotebooks():
             ctrl.cleanup()
         super().closeEvent(event)

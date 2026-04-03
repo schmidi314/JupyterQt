@@ -6,7 +6,7 @@ from jupyterqt.models.cell_model import CellModel, CellType
 
 @dataclass
 class NotebookModel:
-    notebook_id: str
+    notebookId: str
     path: str
     cells: list[CellModel]
     kernel_id: str | None = None
@@ -16,14 +16,14 @@ class NotebookModel:
     nbformat_minor: int = 5
 
     @staticmethod
-    def from_ipynb_dict(path: str, data: dict) -> "NotebookModel":
-        cells = [CellModel.from_ipynb_cell(c) for c in data.get("cells", [])]
+    def fromIpynbDict(path: str, data: dict) -> "NotebookModel":
+        cells = [CellModel.fromIpynbCell(c) for c in data.get("cells", [])]
         if not cells:
             cells = [CellModel.new(CellType.CODE)]
         metadata = data.get("metadata", {})
         kernel_name = metadata.get("kernelspec", {}).get("name", "python3")
         return NotebookModel(
-            notebook_id=str(uuid.uuid4()),
+            notebookId=str(uuid.uuid4()),
             path=path,
             cells=cells,
             metadata=metadata,
@@ -32,21 +32,21 @@ class NotebookModel:
             nbformat_minor=data.get("nbformat_minor", 5),
         )
 
-    def to_ipynb_dict(self) -> dict:
+    def toIpynbDict(self) -> dict:
         return {
             "nbformat": self.nbformat,
             "nbformat_minor": self.nbformat_minor,
             "metadata": self.metadata,
-            "cells": [c.to_ipynb_cell() for c in self.cells],
+            "cells": [c.toIpynbCell() for c in self.cells],
         }
 
-    def get_cell(self, cell_id: str) -> CellModel | None:
+    def getCell(self, cellId: str) -> CellModel | None:
         for c in self.cells:
-            if c.cell_id == cell_id:
+            if c.cellId == cellId:
                 return c
         return None
 
-    def add_cell(self, cell_type: CellType = CellType.CODE,
+    def addCell(self, cell_type: CellType = CellType.CODE,
                  index: int | None = None) -> CellModel:
         cell = CellModel.new(cell_type)
         if index is None:
@@ -55,18 +55,18 @@ class NotebookModel:
             self.cells.insert(index, cell)
         return cell
 
-    def remove_cell(self, cell_id: str) -> None:
-        self.cells = [c for c in self.cells if c.cell_id != cell_id]
+    def removeCell(self, cellId: str) -> None:
+        self.cells = [c for c in self.cells if c.cellId != cellId]
 
-    def move_cell(self, cell_id: str, new_index: int) -> None:
-        cell = self.get_cell(cell_id)
+    def moveCell(self, cellId: str, new_index: int) -> None:
+        cell = self.getCell(cellId)
         if cell is None:
             return
         self.cells.remove(cell)
         self.cells.insert(new_index, cell)
 
-    def index_of(self, cell_id: str) -> int:
+    def indexOf(self, cellId: str) -> int:
         for i, c in enumerate(self.cells):
-            if c.cell_id == cell_id:
+            if c.cellId == cellId:
                 return i
         return -1

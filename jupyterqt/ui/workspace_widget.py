@@ -3,6 +3,7 @@ from PySide6.QtWidgets import QWidget, QVBoxLayout, QSplitter
 
 from jupyterqt.controllers.notebook_controller import NotebookController
 from jupyterqt.ui.editor_pane import EditorPane
+from jupyterqt.commands import CommandRegistry
 
 
 class WorkspaceWidget(QWidget):
@@ -28,9 +29,9 @@ class WorkspaceWidget(QWidget):
         self._root_splitter.setChildrenCollapsible(False)
         self._root_layout.addWidget(self._root_splitter)
 
-        first_pane = self._make_pane()
+        first_pane = self._makePane()
         self._root_splitter.addWidget(first_pane)
-        self._set_active(first_pane)
+        self._setActive(first_pane)
 
         self._registerCommands()
 
@@ -38,24 +39,26 @@ class WorkspaceWidget(QWidget):
     # commands
 
     def _registerCommands(self):
-        pass
+        reg = CommandRegistry.instance()
+        reg.register('notebook', 'add-cell-above', [], [], self.cmdAddCellAbove)
+        reg.register('notebook', 'add-cell-below', [], [], self.cmdAddCellBelow)
 
-    def cmd_add_cell_above(self):
+    def cmdAddCellAbove(self):
         if self._active_pane is not None:
-            self._active_pane.get_current_notebook_tab().cmd_add_cell('above')
+            self._active_pane.getCurrentNotebookTab().cmdAddCell('above')
 
-    def cmd_add_cell_below(self):
+    def cmdAddCellBelow(self):
         if self._active_pane is not None:
-            self._active_pane.get_current_notebook_tab().cmd_add_cell('below')
+            self._active_pane.getCurrentNotebookTab().cmdAddCell('below')
 
     # ── public API ──────────────────────────────────────────────────────
 
-    def open_notebook(self, controller: NotebookController) -> None:
+    def openNotebook(self, controller: NotebookController) -> None:
         """Open (or focus) a notebook in the currently active pane."""
         pane = self._active_pane or self._panes[0]
-        pane.open_notebook(controller)
+        pane.openNotebook(controller)
 
-    def open_notebook_in_new_view(self, controller: NotebookController) -> None:
+    def openNotebookInNewView(self, controller: NotebookController) -> None:
         """Open a second view of an already-open notebook.
         Splits the active pane if there's only one, otherwise opens in the
         first OTHER pane (or a new split)."""
@@ -64,18 +67,18 @@ class WorkspaceWidget(QWidget):
         # Open in a pane that doesn't already show this controller
         for pane in self._panes:
             if pane is not self._active_pane:
-                pane.open_notebook(controller)
-                self._set_active(pane)
+                pane.openNotebook(controller)
+                self._setActive(pane)
                 return
 
-    def current_controller(self) -> NotebookController | None:
+    def currentController(self) -> NotebookController | None:
         if self._active_pane:
-            return self._active_pane.current_controller()
+            return self._active_pane.currentController()
         return None
 
     # ── pane lifecycle ───────────────────────────────────────────────────
 
-    def _make_pane(self) -> EditorPane:
+    def _makePane(self) -> EditorPane:
         pane = EditorPane(self)
         self._panes.append(pane)
         pane.split_h_requested.connect(
@@ -84,28 +87,28 @@ class WorkspaceWidget(QWidget):
         pane.split_v_requested.connect(
             lambda p=pane: self._split(p, Qt.Orientation.Vertical)
         )
-        pane.close_requested.connect(lambda p=pane: self._close_pane(p))
-        pane.focused.connect(lambda p=pane: self._set_active(p))
+        pane.close_requested.connect(lambda p=pane: self._closePane(p))
+        pane.focused.connect(lambda p=pane: self._setActive(p))
         pane.current_controller_changed.connect(
-            lambda ctrl, p=pane: self._on_pane_controller_changed(p, ctrl)
+            lambda ctrl, p=pane: self._onPaneControllerChanged(p, ctrl)
         )
         return pane
 
-    def _set_active(self, pane: EditorPane) -> None:
+    def _setActive(self, pane: EditorPane) -> None:
         if self._active_pane and self._active_pane is not pane:
-            self._active_pane.set_active(False)
+            self._active_pane.setActive(False)
         self._active_pane = pane
-        pane.set_active(True)
-        self.active_controller_changed.emit(pane.current_controller())
+        pane.setActive(True)
+        self.active_controller_changed.emit(pane.currentController())
 
-    def _on_pane_controller_changed(self, pane: EditorPane,
+    def _onPaneControllerChanged(self, pane: EditorPane,
                                     ctrl: NotebookController | None) -> None:
         if pane is self._active_pane:
             self.active_controller_changed.emit(ctrl)
 
     def _split(self, pane: EditorPane, orientation: Qt.Orientation) -> None:
-        parent_splitter = self._parent_splitter(pane)
-        new_pane = self._make_pane()
+        parent_splitter = self._parentSplitter(pane)
+        new_pane = self._makePane()
 
         if parent_splitter and parent_splitter.orientation() == orientation:
             # Same direction as parent → just insert next to pane
@@ -135,13 +138,13 @@ class WorkspaceWidget(QWidget):
 
             self._equalize(new_splitter)
 
-        self._set_active(new_pane)
+        self._setActive(new_pane)
 
-    def _close_pane(self, pane: EditorPane) -> None:
+    def _closePane(self, pane: EditorPane) -> None:
         if len(self._panes) <= 1:
             return  # Never close the last pane
 
-        parent_splitter = self._parent_splitter(pane)
+        parent_splitter = self._parentSplitter(pane)
         self._panes.remove(pane)
 
         if parent_splitter:
@@ -150,15 +153,15 @@ class WorkspaceWidget(QWidget):
 
             # If the splitter now has exactly one child, dissolve it
             if parent_splitter.count() == 1:
-                self._dissolve_splitter(parent_splitter)
+                self._dissolveSplitter(parent_splitter)
         else:
             pane.setParent(None)
             pane.deleteLater()
 
         if pane is self._active_pane:
-            self._set_active(self._panes[-1])
+            self._setActive(self._panes[-1])
 
-    def _dissolve_splitter(self, splitter: QSplitter) -> None:
+    def _dissolveSplitter(self, splitter: QSplitter) -> None:
         """Replace a single-child splitter with its only child."""
         if splitter.count() != 1:
             return
@@ -182,7 +185,7 @@ class WorkspaceWidget(QWidget):
                                    else self._root_splitter)
             self._root_layout.addWidget(child)
 
-    def _parent_splitter(self, pane: EditorPane) -> QSplitter | None:
+    def _parentSplitter(self, pane: EditorPane) -> QSplitter | None:
         p = pane.parent()
         return p if isinstance(p, QSplitter) else None
 

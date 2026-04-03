@@ -3,11 +3,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 
-def _new_msg_id() -> str:
+def _newMsgId() -> str:
     return str(uuid.uuid4())
 
 
-def _now_iso() -> str:
+def _nowIso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
@@ -29,18 +29,18 @@ class JupyterMessage:
                channel: str = "shell", username: str = "jupyterqt",
                parent_header: dict | None = None) -> "JupyterMessage":
         return JupyterMessage(
-            msg_id=_new_msg_id(),
+            msg_id=_newMsgId(),
             msg_type=msg_type,
             session=session,
             username=username,
-            date=_now_iso(),
+            date=_nowIso(),
             parent_header=parent_header or {},
             metadata={},
             content=content,
             channel=channel,
         )
 
-    def to_dict(self) -> dict:
+    def toDict(self) -> dict:
         return {
             "header": {
                 "msg_id": self.msg_id,
@@ -58,7 +58,7 @@ class JupyterMessage:
         }
 
     @staticmethod
-    def from_dict(data: dict) -> "JupyterMessage":
+    def fromDict(data: dict) -> "JupyterMessage":
         header = data.get("header", {})
         return JupyterMessage(
             msg_id=header.get("msg_id", ""),

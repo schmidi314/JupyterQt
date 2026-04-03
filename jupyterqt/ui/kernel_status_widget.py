@@ -29,7 +29,7 @@ class _LED(QWidget):
         self._color = color
         self.setFixedSize(12, 12)
 
-    def set_color(self, color: str) -> None:
+    def setColor(self, color: str) -> None:
         self._color = color
         self.update()
 
@@ -52,8 +52,8 @@ class KernelStatusWidget(QWidget):
         layout.addWidget(self._led)
         layout.addWidget(self._label)
 
-    def set_status(self, status: KernelStatus) -> None:
+    def setStatus(self, status: KernelStatus) -> None:
         color = _STATUS_COLORS.get(status, "#888888")
         label = _STATUS_LABELS.get(status, str(status.value))
-        self._led.set_color(color)
+        self._led.setColor(color)
         self._label.setText(label)

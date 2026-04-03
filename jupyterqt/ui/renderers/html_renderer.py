@@ -11,20 +11,20 @@ class HtmlRenderer(QTextBrowser):
         self.setOpenExternalLinks(True)
         self.setStyleSheet("QTextBrowser { background: transparent; border: none; }")
         from jupyterqt.settings import Settings
-        font = QFont("Monospace", Settings.instance().output_font_size)
+        font = QFont("Monospace", Settings.instance().outputFontSize)
         font.setStyleHint(QFont.StyleHint.TypeWriter)
         self.setFont(font)
-        Settings.instance().output_font_size_changed.connect(self._on_font_size_changed)
+        Settings.instance().output_font_size_changed.connect(self._onFontSizeChanged)
         self.setHtml(html)
-        self._adjust_height()
+        self._adjustHeight()
 
-    def _on_font_size_changed(self, size: int) -> None:
+    def _onFontSizeChanged(self, size: int) -> None:
         f = self.font()
         f.setPointSize(size)
         self.setFont(f)
-        self._adjust_height()
+        self._adjustHeight()
 
-    def _adjust_height(self):
+    def _adjustHeight(self):
         doc = self.document()
         doc.setTextWidth(self.width() if self.width() > 0 else 600)
         height = int(doc.size().height()) + 4
@@ -32,4 +32,4 @@ class HtmlRenderer(QTextBrowser):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self._adjust_height()
+        self._adjustHeight()

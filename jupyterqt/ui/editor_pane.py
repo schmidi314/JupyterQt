@@ -73,24 +73,24 @@ class EditorPane(QWidget):
         self._tabs = QTabWidget(self)
         self._tabs.setTabsClosable(True)
         self._tabs.setMovable(True)
-        self._tabs.tabCloseRequested.connect(self._on_tab_close)
-        self._tabs.currentChanged.connect(self._on_current_changed)
+        self._tabs.tabCloseRequested.connect(self._onTabClose)
+        self._tabs.currentChanged.connect(self._onCurrentChanged)
         self._tabs.setStyleSheet(
             "QTabWidget::pane { border: none; }"
             "QTabBar::tab { padding: 4px 10px; }"
         )
         layout.addWidget(self._tabs)
 
-        self._update_border()
+        self._updateBorder()
 
     # ── public API ──────────────────────────────────────────────────────
 
-    def open_notebook(self, controller: NotebookController) -> None:
+    def openNotebook(self, controller: NotebookController) -> None:
         """Open a view of this notebook. Focuses an existing tab if already open."""
-        notebook_id = controller.notebook_id
-        if notebook_id in self._notebook_id_to_tab:
+        notebookId = controller.notebookId
+        if notebookId in self._notebook_id_to_tab:
             # Already open in this pane — just focus it
-            tab = self._notebook_id_to_tab[notebook_id]
+            tab = self._notebook_id_to_tab[notebookId]
             self._tabs.setCurrentWidget(tab)
             return
 
@@ -98,33 +98,33 @@ class EditorPane(QWidget):
         tab_name = controller.path.split("/")[-1]
         idx = self._tabs.addTab(tab, tab_name)
         self._tabs.setCurrentIndex(idx)
-        self._notebook_id_to_tab[notebook_id] = tab
+        self._notebook_id_to_tab[notebookId] = tab
 
         controller.kernel_status_changed.connect(
-            lambda s, nid=notebook_id: self._on_kernel_status(nid, s)
+            lambda s, nid=notebookId: self._onKernelStatus(nid, s)
         )
 
-    def current_controller(self) -> NotebookController | None:
+    def currentController(self) -> NotebookController | None:
         tab = self._tabs.currentWidget()
         if isinstance(tab, NotebookTab):
             return tab.controller
         return None
 
-    def set_active(self, active: bool) -> None:
+    def setActive(self, active: bool) -> None:
         self._is_active = active
-        self._update_border()
+        self._updateBorder()
 
-    def has_notebooks(self) -> bool:
+    def hasNotebooks(self) -> bool:
         return self._tabs.count() > 0
 
-    def get_current_notebook_tab(self):
+    def getCurrentNotebookTab(self):
         current_tab = self._tabs.currentWidget()
         assert isinstance(current_tab, NotebookTab)
         return current_tab
 
     # ── internal ────────────────────────────────────────────────────────
 
-    def _update_border(self) -> None:
+    def _updateBorder(self) -> None:
         if self._is_active:
             self.setStyleSheet(
                 "EditorPane > QWidget { border: 2px solid #1976d2; border-radius: 3px; }"
@@ -132,23 +132,23 @@ class EditorPane(QWidget):
         else:
             self.setStyleSheet("")
 
-    def _on_tab_close(self, index: int) -> None:
+    def _onTabClose(self, index: int) -> None:
         tab = self._tabs.widget(index)
         if isinstance(tab, NotebookTab):
-            nid = tab.controller.notebook_id
+            nid = tab.controller.notebookId
             self._notebook_id_to_tab.pop(nid, None)
         self._tabs.removeTab(index)
-        self.current_controller_changed.emit(self.current_controller())
+        self.current_controller_changed.emit(self.currentController())
 
-    def _on_current_changed(self, _index: int) -> None:
-        ctrl = self.current_controller()
+    def _onCurrentChanged(self, _index: int) -> None:
+        ctrl = self.currentController()
         self.current_controller_changed.emit(ctrl)
         self.focused.emit()
         if ctrl:
             from jupyterqt.models.kernel_state import KernelStatus
-            self._kernel_status.set_status(ctrl.kernel_status)
+            self._kernel_status.setStatus(ctrl.kernelStatus)
 
-    def _on_kernel_status(self, notebook_id: str, status) -> None:
-        ctrl = self.current_controller()
-        if ctrl and ctrl.notebook_id == notebook_id:
-            self._kernel_status.set_status(status)
+    def _onKernelStatus(self, notebookId: str, status) -> None:
+        ctrl = self.currentController()
+        if ctrl and ctrl.notebookId == notebookId:
+            self._kernel_status.setStatus(status)

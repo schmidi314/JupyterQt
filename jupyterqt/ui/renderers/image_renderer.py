@@ -22,9 +22,9 @@ class ImageRenderer(QLabel):
         if self._original_pixmap.isNull():
             self.setText("[Image failed to load]")
         else:
-            self._display_pixmap()
+            self._displayPixmap()
 
-    def _display_pixmap(self):
+    def _displayPixmap(self):
         if self._original_pixmap.isNull():
             return
         max_w = self.parent().width() if self.parent() else 700
@@ -42,4 +42,4 @@ class ImageRenderer(QLabel):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self._display_pixmap()
+        self._displayPixmap()
