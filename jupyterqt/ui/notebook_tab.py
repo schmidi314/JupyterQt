@@ -57,6 +57,38 @@ class NotebookTab(QScrollArea):
     # #########################################################################################################################################
     # Commands
 
+    def cmdInsertHeadingAbove(self) -> None:
+        widgets = self._orderedWidgets()
+        if not (0 <= self._selected_idx < len(widgets)):
+            return
+        current_cellId = widgets[self._selected_idx].cellId
+        current_cell = self._controller.model.getCell(current_cellId)
+        level = _headingLevel(current_cell.source) if current_cell else 0
+        prefix = '#' * (level if level > 0 else 1) + ' '
+        cell = self._controller.addCellAbove(current_cellId, CellType.MARKDOWN)
+        if cell:
+            self._controller.updateCellSource(cell.cellId, prefix)
+            self._enterEditMode(cell.cellId)
+            w = self._cell_widgets.get(cell.cellId)
+            if w:
+                w.focusEditor()
+
+    def cmdInsertHeadingBelow(self) -> None:
+        widgets = self._orderedWidgets()
+        if not (0 <= self._selected_idx < len(widgets)):
+            return
+        current_cellId = widgets[self._selected_idx].cellId
+        current_cell = self._controller.model.getCell(current_cellId)
+        level = _headingLevel(current_cell.source) if current_cell else 0
+        prefix = '#' * (level if level > 0 else 1) + ' '
+        cell = self._controller.addCellBelow(current_cellId, CellType.MARKDOWN)
+        if cell:
+            self._controller.updateCellSource(cell.cellId, prefix)
+            self._enterEditMode(cell.cellId)
+            w = self._cell_widgets.get(cell.cellId)
+            if w:
+                w.focusEditor()
+
     def cmdChangeCellType(self, cell_type: CellType) -> None:
         widgets = self._orderedWidgets()
         if 0 <= self._selected_idx < len(widgets):

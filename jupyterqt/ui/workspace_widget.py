@@ -44,9 +44,13 @@ class WorkspaceWidget(QWidget):
         reg.register('notebook', 'add-cell-above', [], [], self.cmdAddCellAbove)
         reg.register('notebook', 'add-cell-below', [], [], self.cmdAddCellBelow)
         reg.register('notebook', 'change-cell-type-markdown', [], [], self.cmdChangeCellTypeMarkdown)
+        reg.register('notebook', 'insert-heading-above', [], [], self.cmdInsertHeadingAbove)
+        reg.register('notebook', 'insert-heading-below', [], [], self.cmdInsertHeadingBelow)
         reg.addKeyboardShortcut('notebook', 'add-cell-above', 'a')
         reg.addKeyboardShortcut('notebook', 'add-cell-below', 'b')
         reg.addKeyboardShortcut('notebook', 'change-cell-type-markdown', 'm')
+        reg.addKeyboardShortcut('notebook', 'insert-heading-above', 'shift_a')
+        reg.addKeyboardShortcut('notebook', 'insert-heading-below', 'shift_b')
 
     def cmdAddCellAbove(self):
         if self._active_pane is not None:
@@ -59,6 +63,14 @@ class WorkspaceWidget(QWidget):
     def cmdChangeCellTypeMarkdown(self):
         if self._active_pane is not None:
             self._active_pane.getCurrentNotebookTab().cmdChangeCellType(CellType.MARKDOWN)
+
+    def cmdInsertHeadingAbove(self):
+        if self._active_pane is not None:
+            self._active_pane.getCurrentNotebookTab().cmdInsertHeadingAbove()
+
+    def cmdInsertHeadingBelow(self):
+        if self._active_pane is not None:
+            self._active_pane.getCurrentNotebookTab().cmdInsertHeadingBelow()
 
     # #########################################################################################################################################
     # Public API
