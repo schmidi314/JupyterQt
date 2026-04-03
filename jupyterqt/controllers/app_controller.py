@@ -85,7 +85,6 @@ class AppController(QObject):
         return self._active_notebook
 
     def setActiveNotebook(self, ctrl: NotebookController | None) -> None:
-        print(f'Notebook {ctrl.path} is now active.')
         self._active_notebook = ctrl
 
     def allNotebooks(self) -> list[NotebookController]:

@@ -493,10 +493,11 @@ class _OutputContainer(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._collapsed = False
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
 
         outer = QHBoxLayout(self)
-        outer.setContentsMargins(0, 2, 0, 2)
-        outer.setSpacing(4)
+        #outer.setContentsMargins(0, 2, 0, 2)
+        #outer.setSpacing(4)
 
         self._bar = _ClickableBar(self)
         self._bar.setFixedWidth(4)
@@ -517,6 +518,7 @@ class _OutputContainer(QWidget):
         self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self._scroll.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
         self._scroll.setMinimumHeight(0)
+        self._scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
 
         self._output_area = OutputArea(self._scroll)
         self._scroll.setWidget(self._output_area)
@@ -524,6 +526,7 @@ class _OutputContainer(QWidget):
         self._dots = QLabel("···", right)
         self._dots.setStyleSheet("color: #888; font-size: 10pt; padding: 2px 4px;")
         self._dots.setVisible(False)
+        self._dots.setMaximumHeight(0)
 
         right_layout.addWidget(self._scroll)
         right_layout.addWidget(self._dots)
@@ -545,6 +548,7 @@ class _OutputContainer(QWidget):
         self._collapsed = not self._collapsed
         self._scroll.setVisible(not self._collapsed)
         self._dots.setVisible(self._collapsed)
+        self._dots.setMaximumHeight(16777215 if self._collapsed else 0)
         self._bar.setStyleSheet(self._STYLE_COLLAPSED if self._collapsed else self._STYLE_EXPANDED)
 
     def appendOutput(self, output) -> None:

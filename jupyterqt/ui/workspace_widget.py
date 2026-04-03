@@ -46,11 +46,17 @@ class WorkspaceWidget(QWidget):
         reg.register('notebook', 'change-cell-type-markdown', [], [], self.cmdChangeCellTypeMarkdown)
         reg.register('notebook', 'insert-heading-above', [], [], self.cmdInsertHeadingAbove)
         reg.register('notebook', 'insert-heading-below', [], [], self.cmdInsertHeadingBelow)
+        reg.register('notebook', 'copy-cell', [], [], self.cmdCopyCell)
+        reg.register('notebook', 'cut-cell', [], [], self.cmdCutCell)
+        reg.register('notebook', 'paste-cell', [], [], self.cmdPasteCell)
         reg.addKeyboardShortcut('notebook', 'add-cell-above', 'a')
         reg.addKeyboardShortcut('notebook', 'add-cell-below', 'b')
         reg.addKeyboardShortcut('notebook', 'change-cell-type-markdown', 'm')
         reg.addKeyboardShortcut('notebook', 'insert-heading-above', 'shift_a')
         reg.addKeyboardShortcut('notebook', 'insert-heading-below', 'shift_b')
+        reg.addKeyboardShortcut('notebook', 'copy-cell', 'c')
+        reg.addKeyboardShortcut('notebook', 'cut-cell', 'x')
+        reg.addKeyboardShortcut('notebook', 'paste-cell', 'v')
 
     def cmdRunSelectedCell(self):
         if self._active_pane is not None:
@@ -75,6 +81,18 @@ class WorkspaceWidget(QWidget):
     def cmdInsertHeadingBelow(self):
         if self._active_pane is not None:
             self._active_pane.getCurrentNotebookTab().cmdInsertHeadingBelow()
+
+    def cmdCopyCell(self):
+        if self._active_pane is not None:
+            self._active_pane.getCurrentNotebookTab().cmdCopyCell()
+
+    def cmdCutCell(self):
+        if self._active_pane is not None:
+            self._active_pane.getCurrentNotebookTab().cmdCutCell()
+
+    def cmdPasteCell(self):
+        if self._active_pane is not None:
+            self._active_pane.getCurrentNotebookTab().cmdPasteCell()
 
     # #########################################################################################################################################
     # Public API
@@ -119,6 +137,7 @@ class WorkspaceWidget(QWidget):
         pane.current_controller_changed.connect(
             lambda ctrl, p=pane: self._onPaneControllerChanged(p, ctrl)
         )
+        pane.new_view_requested.connect(self.openNotebookInNewView)
         return pane
 
     def _setActive(self, pane: EditorPane) -> None:

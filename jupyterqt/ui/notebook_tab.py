@@ -1,3 +1,4 @@
+import copy
 import time
 
 from PySide6.QtCore import Qt
@@ -10,6 +11,9 @@ from jupyterqt.models.kernel_state import KernelStatus
 from jupyterqt.ui.cell_widget import CellWidget, _headingLevel
 from jupyterqt.ui.icon_registry import icon
 from jupyterqt.ui.kernel_status_widget import KernelStatusWidget
+
+
+_cell_clipboard: CellModel | None = None   # shared across all tabs/panes
 
 
 class NotebookTab(QWidget):
@@ -181,6 +185,34 @@ class NotebookTab(QWidget):
                 self._select(self._selected_idx + 1)
             else:
                 raise ValueError(f'{above_or_below=}')
+
+    def cmdCopyCell(self) -> None:
+        global _cell_clipboard
+        widgets = self._orderedWidgets()
+        if 0 <= self._selected_idx < len(widgets):
+            cell = self._controller.model.getCell(widgets[self._selected_idx].cellId)
+            if cell:
+                _cell_clipboard = copy.copy(cell)
+
+    def cmdCutCell(self) -> None:
+        global _cell_clipboard
+        widgets = self._orderedWidgets()
+        if 0 <= self._selected_idx < len(widgets):
+            cell = self._controller.model.getCell(widgets[self._selected_idx].cellId)
+            if cell:
+                _cell_clipboard = copy.copy(cell)
+                self._controller.deleteCell(cell.cellId)
+
+    def cmdPasteCell(self) -> None:
+        global _cell_clipboard
+        if _cell_clipboard is None:
+            return
+        widgets = self._orderedWidgets()
+        ref_id = widgets[self._selected_idx].cellId if 0 <= self._selected_idx < len(widgets) else None
+        new_cell = self._controller.addCellBelow(ref_id, _cell_clipboard.cell_type) if ref_id else self._controller.addCell(_cell_clipboard.cell_type)
+        if new_cell:
+            self._controller.updateCellSource(new_cell.cellId, _cell_clipboard.source)
+            self._select(self._selected_idx + 1)
 
     # #########################################################################################################################################
     # Build
