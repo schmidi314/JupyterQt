@@ -28,6 +28,7 @@ class NotebookController(QObject):
     cell_added = Signal(int, object)                 # index, CellModel
     cell_removed = Signal(str)                       # cellId
     cell_moved = Signal(str, int)                    # cellId, new_index
+    cell_type_changed = Signal(str, object)          # cellId, CellType
 
     def __init__(self, path: str, config: ServerConfig, parent=None):
         super().__init__(parent)
@@ -261,6 +262,15 @@ class NotebookController(QObject):
         if idx > 0:
             self._model.moveCell(cellId, idx - 1)
             self.cell_moved.emit(cellId, idx - 1)
+
+    def changeCellType(self, cellId: str, new_type: CellType) -> None:
+        if not self._model:
+            return
+        cell = self._model.getCell(cellId)
+        if cell is None or cell.cell_type == new_type:
+            return
+        cell.cell_type = new_type
+        self.cell_type_changed.emit(cellId, new_type)
 
     def moveCellDown(self, cellId: str) -> None:
         if not self._model:

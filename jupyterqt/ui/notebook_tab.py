@@ -56,6 +56,11 @@ class NotebookTab(QScrollArea):
     # #########################################################################################################################################
     # Commands
 
+    def cmdChangeCellType(self, cell_type: CellType) -> None:
+        widgets = self._orderedWidgets()
+        if 0 <= self._selected_idx < len(widgets):
+            self._controller.changeCellType(widgets[self._selected_idx].cellId, cell_type)
+
     def cmdAddCell(self, above_or_below: str) -> None:
         print('cmdAddCell', above_or_below)
         widgets = self._orderedWidgets()
@@ -110,6 +115,7 @@ class NotebookTab(QScrollArea):
         self._controller.cell_added.connect(self._onCellAdded)
         self._controller.cell_removed.connect(self._onCellRemoved)
         self._controller.cell_moved.connect(self._onCellMoved)
+        self._controller.cell_type_changed.connect(self._onCellTypeChanged)
 
     # #########################################################################################################################################
     # Mode management
@@ -215,15 +221,6 @@ class NotebookTab(QScrollArea):
             self._select(self._selected_idx + 1)
             return
 
-        # Add cell above / below — dispatched through the command registry
-        # if key == Qt.Key.Key_A:
-        #     CommandRegistry.instance().execute('notebook', 'add-cell-above')
-        #     return
-        #
-        # if key == Qt.Key.Key_B:
-        #     CommandRegistry.instance().execute('notebook', 'add-cell-below')
-        #     return
-
         # D + D to delete (two D presses within 500 ms)
         if key == Qt.Key.Key_D:
             now = time.monotonic()
@@ -298,6 +295,18 @@ class NotebookTab(QScrollArea):
         stretch_idx = self._layout.count() - 1
         self._layout.insertWidget(min(new_index, stretch_idx), w)
         self._select(new_index)
+
+    def _onCellTypeChanged(self, cellId: str, new_type) -> None:
+        old_w = self._cell_widgets.pop(cellId, None)
+        if old_w is None:
+            return
+        idx = self._layout.indexOf(old_w)
+        self._layout.removeWidget(old_w)
+        old_w.deleteLater()
+        cell = self._controller.model.getCell(cellId)
+        if cell:
+            self._insertCellWidget(cell, idx)
+            self._select(self._selected_idx)
 
     def getCellWidget(self, cellId: str) -> CellWidget | None:
         return self._cell_widgets.get(cellId)

@@ -2,6 +2,7 @@ from PySide6.QtCore import Signal, Qt
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QSplitter
 
 from jupyterqt.controllers.notebook_controller import NotebookController
+from jupyterqt.models.cell_model import CellType
 from jupyterqt.ui.editor_pane import EditorPane
 from jupyterqt.commands import CommandRegistry
 
@@ -42,8 +43,10 @@ class WorkspaceWidget(QWidget):
         reg = CommandRegistry.instance()
         reg.register('notebook', 'add-cell-above', [], [], self.cmdAddCellAbove)
         reg.register('notebook', 'add-cell-below', [], [], self.cmdAddCellBelow)
+        reg.register('notebook', 'change-cell-type-markdown', [], [], self.cmdChangeCellTypeMarkdown)
         reg.addKeyboardShortcut('notebook', 'add-cell-above', 'a')
         reg.addKeyboardShortcut('notebook', 'add-cell-below', 'b')
+        reg.addKeyboardShortcut('notebook', 'change-cell-type-markdown', 'm')
 
     def cmdAddCellAbove(self):
         if self._active_pane is not None:
@@ -52,6 +55,10 @@ class WorkspaceWidget(QWidget):
     def cmdAddCellBelow(self):
         if self._active_pane is not None:
             self._active_pane.getCurrentNotebookTab().cmdAddCell('below')
+
+    def cmdChangeCellTypeMarkdown(self):
+        if self._active_pane is not None:
+            self._active_pane.getCurrentNotebookTab().cmdChangeCellType(CellType.MARKDOWN)
 
     # #########################################################################################################################################
     # Public API
