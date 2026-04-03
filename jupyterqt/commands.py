@@ -26,11 +26,10 @@ class CommandRegistry:
             cls._instance = CommandRegistry()
         return cls._instance
 
-    # ------------------------------------------------------------------ registration
+    # #########################################################################################################################################
+    # Registration
 
-    def register(self, context: str, command: str,
-                 argument_names: list, argument_types: list,
-                 callback: Callable) -> None:
+    def register(self, context: str, command: str, argument_names: list, argument_types: list, callback: Callable) -> None:
         """Register or replace a command."""
         self._commands[(context, command)] = Command(
             context, command, argument_names, argument_types, callback
@@ -46,7 +45,8 @@ class CommandRegistry:
         for k in keys:
             del self._commands[k]
 
-    # ------------------------------------------------------------------ lookup
+    # #########################################################################################################################################
+    # Lookup
 
     def get(self, context: str, command: str) -> Command | None:
         return self._commands.get((context, command))
@@ -57,7 +57,8 @@ class CommandRegistry:
     def allCommands(self) -> list[Command]:
         return list(self._commands.values())
 
-    # ------------------------------------------------------------------ execution
+    # #########################################################################################################################################
+    # Execution
 
     def execute(self, context: str, command: str, *args) -> None:
         """Look up and call the command, passing *args to the callback."""

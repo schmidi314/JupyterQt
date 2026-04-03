@@ -83,7 +83,8 @@ class EditorPane(QWidget):
 
         self._updateBorder()
 
-    # ── public API ──────────────────────────────────────────────────────
+    # #########################################################################################################################################
+    # Public API
 
     def openNotebook(self, controller: NotebookController) -> None:
         """Open a view of this notebook. Focuses an existing tab if already open."""
@@ -122,7 +123,8 @@ class EditorPane(QWidget):
         assert isinstance(current_tab, NotebookTab)
         return current_tab
 
-    # ── internal ────────────────────────────────────────────────────────
+    # #########################################################################################################################################
+    # Internal
 
     def _updateBorder(self) -> None:
         if self._is_active:

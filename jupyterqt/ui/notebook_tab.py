@@ -53,7 +53,8 @@ class NotebookTab(QScrollArea):
             self._select(0)
             self.setFocus()
 
-    # ------------------------------------------------------------------ Commands
+    # #########################################################################################################################################
+    # Commands
 
     def cmdAddCell(self, above_or_below: str) -> None:
         print('cmdAddCell', above_or_below)
@@ -68,7 +69,8 @@ class NotebookTab(QScrollArea):
             else:
                 raise ValueError(f'{above_or_below=}')
 
-    # ------------------------------------------------------------------ Build
+    # #########################################################################################################################################
+    # Build
 
     @property
     def controller(self) -> NotebookController:
@@ -109,7 +111,8 @@ class NotebookTab(QScrollArea):
         self._controller.cell_removed.connect(self._onCellRemoved)
         self._controller.cell_moved.connect(self._onCellMoved)
 
-    # ------------------------------------------------------------------ Mode management
+    # #########################################################################################################################################
+    # Mode management
 
     def _orderedWidgets(self) -> list[CellWidget]:
         result = []
@@ -147,7 +150,8 @@ class NotebookTab(QScrollArea):
                 w.setVisualMode("normal")
         self._mode = "edit"
 
-    # ------------------------------------------------------------------ Slots from cell widgets
+    # #########################################################################################################################################
+    # Slots from cell widgets
 
     def _onEditModeRequested(self, cellId: str) -> None:
         self._enterEditMode(cellId)
@@ -170,9 +174,12 @@ class NotebookTab(QScrollArea):
                     self._enterCommandMode()
                 return
 
-    # ------------------------------------------------------------------ Key handling
+    # #########################################################################################################################################
+    # Key handling
 
     def keyPressEvent(self, event) -> None:
+        reg = CommandRegistry.instance()
+
         if self._mode != "command":
             super().keyPressEvent(event)
             return
@@ -233,7 +240,8 @@ class NotebookTab(QScrollArea):
         self._last_key_time = time.monotonic()
         super().keyPressEvent(event)
 
-    # ------------------------------------------------------------------ Controller slots
+    # #########################################################################################################################################
+    # Controller slots
 
     def _onCellSourceChanged(self, cellId: str, source: str) -> None:
         """Called when another view edited this cell — update our editor silently."""

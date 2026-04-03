@@ -35,7 +35,7 @@ class WorkspaceWidget(QWidget):
 
         self._registerCommands()
 
-    # ##############################################################################################################
+    # #########################################################################################################################################
     # commands
 
     def _registerCommands(self):
@@ -51,7 +51,8 @@ class WorkspaceWidget(QWidget):
         if self._active_pane is not None:
             self._active_pane.getCurrentNotebookTab().cmdAddCell('below')
 
-    # ── public API ──────────────────────────────────────────────────────
+    # #########################################################################################################################################
+    # Public API
 
     def openNotebook(self, controller: NotebookController) -> None:
         """Open (or focus) a notebook in the currently active pane."""
@@ -76,7 +77,8 @@ class WorkspaceWidget(QWidget):
             return self._active_pane.currentController()
         return None
 
-    # ── pane lifecycle ───────────────────────────────────────────────────
+    # #########################################################################################################################################
+    # Pane lifecycle
 
     def _makePane(self) -> EditorPane:
         pane = EditorPane(self)
@@ -101,8 +103,7 @@ class WorkspaceWidget(QWidget):
         pane.setActive(True)
         self.active_controller_changed.emit(pane.currentController())
 
-    def _onPaneControllerChanged(self, pane: EditorPane,
-                                    ctrl: NotebookController | None) -> None:
+    def _onPaneControllerChanged(self, pane: EditorPane, ctrl: NotebookController | None) -> None:
         if pane is self._active_pane:
             self.active_controller_changed.emit(ctrl)
 
@@ -194,6 +195,5 @@ class WorkspaceWidget(QWidget):
         n = splitter.count()
         if n == 0:
             return
-        total = (splitter.width() if splitter.orientation() == Qt.Orientation.Horizontal
-                 else splitter.height())
+        total = (splitter.width() if splitter.orientation() == Qt.Orientation.Horizontal else splitter.height())
         splitter.setSizes([total // n] * n)
