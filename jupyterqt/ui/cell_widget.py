@@ -534,6 +534,11 @@ class _SwitchableScrollArea(QScrollArea):
         super().__init__(parent)
         self._vertical_scrolling_on = False
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setWidgetResizable(True)
+
+        self.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
+
+        #self._switchable_scrolling_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
 
         #from jupyterqt.settings import Settings
         #Settings.instance().output_max_lines_changed.connect(lambda _: self._updateMaxHeight())
@@ -586,7 +591,9 @@ class _SwitchableScrollArea(QScrollArea):
         return size_hint
 
     def minimumSizeHint(self):
-        return self.sizeHint()
+        height = self.sizeHint().height()
+        width = super().minimumSizeHint().width()
+        return QSize(width, height)
 
 
 class _OutputContainer(QWidget):
@@ -607,9 +614,6 @@ class _OutputContainer(QWidget):
         right_vertical_layout.setSpacing(0)
 
         self._switchable_scrolling_area = _SwitchableScrollArea(self._output_right)
-        self._switchable_scrolling_area.setWidgetResizable(True)
-        self._switchable_scrolling_area.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
-        self._switchable_scrolling_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         self._output_area = OutputArea(self._switchable_scrolling_area)
 
         self._switchable_scrolling_area.setWidget(self._output_area)
@@ -656,6 +660,10 @@ class _OutputContainer(QWidget):
 
     def appendOutput(self, output) -> None:
         self._output_area.appendOutput(output)
+        print(f'{self._output_area.height()=}')
+        self._output_area.updateGeometry()
+        print(f'{self._output_area.height()=}')
+        self.updateGeometry()
 
     def clear(self) -> None:
         self._output_area.clear()

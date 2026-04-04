@@ -20,7 +20,6 @@ class AppController(QObject):
         self._active_notebook: NotebookController | None = None
         self._pool = QThreadPool.globalInstance()
 
-
     # #########################################################################################################################################
     #
 

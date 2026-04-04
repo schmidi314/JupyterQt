@@ -1,5 +1,5 @@
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QTextCharFormat, QColor, QFont
+from PySide6.QtGui import QTextCharFormat, QColor, QFont, QFontMetrics
 from PySide6.QtWidgets import QTextEdit
 
 
@@ -9,6 +9,7 @@ class TextRenderer(QTextEdit):
     def __init__(self, text: str, stream_name: str = "stdout", parent=None):
         super().__init__(parent)
         self.setReadOnly(True)
+        self.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
         self.setFrameStyle(0)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -23,13 +24,17 @@ class TextRenderer(QTextEdit):
         else:
             self.setStyleSheet("QTextEdit { background: transparent; border: none; }")
 
-        self.setPlainText(text)
+        self.setPlainText(text.rstrip())
         self._adjustHeight()
 
     def _adjustHeight(self):
         doc = self.document()
         doc.setTextWidth(self.width() if self.width() > 0 else 600)
-        height = int(doc.size().height()) + 4
+        height = int(doc.size().height()) - 4
+        line_spacing = QFontMetrics(self.font()).lineSpacing()
+        print('=--------------')
+        print(doc.toPlainText())
+        print(f'_adjustHeight: {height=} {doc.lineCount()=} {doc.lineCount()*line_spacing=}')
         self.setFixedHeight(max(height, 20))
 
     def resizeEvent(self, event):

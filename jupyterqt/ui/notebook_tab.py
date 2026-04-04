@@ -174,15 +174,12 @@ class NotebookTab(QWidget):
             self._onExecuteRequested(widgets[self._selected_idx].cellId)
 
     def cmdAddCell(self, above_or_below: str) -> None:
-        print('cmdAddCell', above_or_below)
         widgets = self._orderedWidgets()
         if 0 <= self._selected_idx < len(widgets):
             if above_or_below == 'above':
                 self._controller.addCellAbove(widgets[self._selected_idx].cellId)
-                self._select(self._selected_idx)
             elif above_or_below == 'below':
                 self._controller.addCellBelow(widgets[self._selected_idx].cellId)
-                self._select(self._selected_idx + 1)
             else:
                 raise ValueError(f'{above_or_below=}')
 
@@ -232,6 +229,7 @@ class NotebookTab(QWidget):
         self._cell_widgets[cell.cellId] = w
         stretch_idx = self._layout.count() - 1
         self._layout.insertWidget(min(index, stretch_idx), w)
+        w.show()
 
         w.setCompletionProvider(self._controller.requestCompletion)
         w.setInspectionProvider(self._controller.requestInspection)
