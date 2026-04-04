@@ -1,7 +1,8 @@
+from __future__ import annotations
 import re
 
-from PySide6.QtCore import Qt, Signal, QPoint
-from PySide6.QtGui import (QFont, QColor, QTextOption, QSyntaxHighlighter,
+from PySide6.QtCore import Qt, Signal, QTimer, QSize
+from PySide6.QtGui import (QFont, QFontMetrics, QColor, QTextOption, QSyntaxHighlighter,
                             QTextCharFormat)
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPlainTextEdit,
                                 QLabel, QFrame, QSizePolicy, QListWidget,
@@ -91,7 +92,7 @@ class _PythonHighlighter(QSyntaxHighlighter):
 
 
 # #########################################################################################################################################
-# Completion popup
+# Completion and inspect popups
 
 class _CompletionPopup(QFrame):
     """Floating completion list; never steals keyboard focus from the editor."""
@@ -152,9 +153,6 @@ class _CompletionPopup(QFrame):
         self._editor.setFocus()
 
 
-# #########################################################################################################################################
-# Inspect popup
-
 class _InspectPopup(QFrame):
     """Shows function signature and docstring from an inspect_reply."""
 
@@ -190,9 +188,9 @@ class _InspectPopup(QFrame):
                 f'<div style="font-family:monospace; font-size:{size}pt">{html}</div>'
             )
         else:
-            from jupyterqt.ui.renderers.error_renderer import _ansiToHtml
+            from jupyterqt.ui.renderers.error_renderer import ansiToHtml
             text = mime_data.get("text/plain", "")
-            html = _ansiToHtml(text).replace("\n", "<br>")
+            html = ansiToHtml(text).replace("\n", "<br>")
             self._browser.setHtml(
                 f'<span style="font-family:monospace; font-size:{size}pt">{html}</span>'
             )
@@ -210,7 +208,7 @@ class _InspectPopup(QFrame):
 
 
 # #########################################################################################################################################
-# Base editor
+# Editors
 
 class _AutoHeightEditor(QPlainTextEdit):
     """Base class: no scrollbars, height tracks document content exactly."""
@@ -262,9 +260,6 @@ class _AutoHeightEditor(QPlainTextEdit):
             return
         super().keyPressEvent(event)
 
-
-# #########################################################################################################################################
-# Code editor
 
 class _CodeEditor(_AutoHeightEditor):
     def __init__(self, parent=None):
@@ -419,9 +414,6 @@ class _CodeEditor(_AutoHeightEditor):
         self.setTextCursor(cursor)
 
 
-# #########################################################################################################################################
-# Markdown editor
-
 class _MarkdownEditor(_AutoHeightEditor):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -476,7 +468,7 @@ class _MarkdownView(QTextBrowser):
 
 
 # #########################################################################################################################################
-# Output container (scrollable + collapsible via left bar)
+# Output container (scrollable + collapsible)
 
 class _ClickableBar(QFrame):
     clicked = Signal()
@@ -486,70 +478,181 @@ class _ClickableBar(QFrame):
         self.clicked.emit()
 
 
-class _OutputContainer(QWidget):
-    _STYLE_EXPANDED = "QFrame { background: #c8c8c8; border-radius: 2px; } QFrame:hover { background: #a0a0a0; }"
-    _STYLE_COLLAPSED = "QFrame { background: #808080; border-radius: 2px; } QFrame:hover { background: #606060; }"
+class _OutputLeftColumn(QFrame):
+    def __init__(self, container: '_OutputContainer', parent=None):
+        super().__init__(parent)
+        self._container = container
+        self.setFixedWidth(60)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setStyleSheet("QFrame { border: 1px solid #d0d0d0; border-radius: 4px; background: white; }")
+        self._click_timer = QTimer(self)
+        self._click_timer.setSingleShot(True)
+        self._click_timer.setInterval(250)
+        self._click_timer.timeout.connect(self._container._toggleScrolling)
 
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._click_timer.start()
+        super().mousePressEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._click_timer.stop()
+            self._container._toggleVisibility()
+        super().mouseDoubleClickEvent(event)
+
+
+class _ResizeHandle(QFrame):
+    def __init__(self, switchable_scrolling_area: _SwitchableScrollArea, parent=None):
+        super().__init__(parent)
+        self._scrolling_area = switchable_scrolling_area
+        self.setFixedHeight(5)
+        self.setCursor(Qt.CursorShape.SizeVerCursor)
+        self.setStyleSheet("QFrame { background: #d8d8d8; border-radius: 2px; }")
+        self._drag_y: float | None = None
+        self._drag_start_h: int = 0
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._drag_y = event.globalPosition().y()
+            self._drag_start_h = self._scrolling_area.getScrollModeHeight()
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        if self._drag_y is not None:
+            delta = int(event.globalPosition().y() - self._drag_y)
+            self._scrolling_area.setScrollModeHeight(max(40, self._drag_start_h + delta))
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self._drag_y = None
+        super().mouseReleaseEvent(event)
+
+
+class _SwitchableScrollArea(QScrollArea):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._vertical_scrolling_on = False
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+
+        #from jupyterqt.settings import Settings
+        #Settings.instance().output_max_lines_changed.connect(lambda _: self._updateMaxHeight())
+        #Settings.instance().output_font_size_changed.connect(lambda _: self._updateMaxHeight())
+
+        self._preferred_height_when_scroll_mode_on = 100
+
+    # #########################################################################################################################################
+    # adapting height
+
+    def getScrollModeHeight(self):
+        return self._preferred_height_when_scroll_mode_on
+
+    def setScrollModeHeight(self, h):
+        self._preferred_height_when_scroll_mode_on = h
+        self.updateGeometry()
+        print(f'{self._preferred_height_when_scroll_mode_on=}')
+
+    # #########################################################################################################################################
+    # switching scrolling
+
+    def toggleVerticalScrolling(self):
+        self.setVerticalScrolling(not self._vertical_scrolling_on)
+
+    def verticalScrollingIsEnabled(self):
+        return self._vertical_scrolling_on
+
+    def setVerticalScrolling(self, on: bool):
+        self._vertical_scrolling_on = on
+        self._setScrollingProperties()
+
+    def _setScrollingProperties(self):
+        if self._vertical_scrolling_on:
+            self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        else:
+            self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.updateGeometry()
+
+    # #########################################################################################################################################
+    # communicating size to QT
+
+    def sizeHint(self):
+        if self._vertical_scrolling_on:
+            width = super().sizeHint().width()
+            size_hint = QSize(width, self._preferred_height_when_scroll_mode_on)
+        elif self.widget():
+            size_hint = self.widget().sizeHint() + QSize(0 , 5)
+        else:
+            size_hint = super().sizeHint()
+        return size_hint
+
+    def minimumSizeHint(self):
+        return self.sizeHint()
+
+
+class _OutputContainer(QWidget):
+    """Contains the full output region of a code cell."""
     def __init__(self, parent=None):
         super().__init__(parent)
         self._collapsed = False
+        self._setupUi()
+
+    def _setupUi(self):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
 
-        outer = QHBoxLayout(self)
-        #outer.setContentsMargins(0, 2, 0, 2)
-        #outer.setSpacing(4)
+        self._output_left = _OutputLeftColumn(self, self)
 
-        self._bar = _ClickableBar(self)
-        self._bar.setFixedWidth(4)
-        self._bar.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._bar.setStyleSheet(self._STYLE_EXPANDED)
-        self._bar.clicked.connect(self._onBarClicked)
-        outer.addWidget(self._bar)
+        self._output_right = QWidget(self)
+        right_vertical_layout = QVBoxLayout(self._output_right)
+        right_vertical_layout.setContentsMargins(0, 0, 0, 0)
+        right_vertical_layout.setSpacing(0)
 
-        right = QWidget(self)
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(0)
+        self._switchable_scrolling_area = _SwitchableScrollArea(self._output_right)
+        self._switchable_scrolling_area.setWidgetResizable(True)
+        self._switchable_scrolling_area.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
+        self._switchable_scrolling_area.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+        self._output_area = OutputArea(self._switchable_scrolling_area)
 
-        self._scroll = QScrollArea(right)
-        self._scroll.setWidgetResizable(True)
-        self._scroll.setFrameStyle(0)
-        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        self._scroll.setSizeAdjustPolicy(QAbstractScrollArea.SizeAdjustPolicy.AdjustToContents)
-        self._scroll.setMinimumHeight(0)
-        self._scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+        self._switchable_scrolling_area.setWidget(self._output_area)
+        right_vertical_layout.addWidget(self._switchable_scrolling_area)
 
-        self._output_area = OutputArea(self._scroll)
-        self._scroll.setWidget(self._output_area)
+        self._resize_handle = _ResizeHandle(self._switchable_scrolling_area, self._output_right)
+        right_vertical_layout.addWidget(self._resize_handle)
 
-        self._dots = QLabel("···", right)
+        self._dots = QLabel("···", self._output_right)
         self._dots.setStyleSheet("color: #888; font-size: 10pt; padding: 2px 4px;")
-        self._dots.setVisible(False)
-        self._dots.setMaximumHeight(0)
+        right_vertical_layout.addWidget(self._dots)
 
-        right_layout.addWidget(self._scroll)
-        right_layout.addWidget(self._dots)
-        outer.addWidget(right, 1)
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(4, 2, 4, 4)
+        outer.setSpacing(6)
+        outer.addWidget(self._output_left)
+        outer.addWidget(self._output_right, 1)
 
-        from jupyterqt.settings import Settings
-        Settings.instance().output_max_lines_changed.connect(lambda _: self._updateMaxHeight())
-        Settings.instance().output_font_size_changed.connect(lambda _: self._updateMaxHeight())
-        self._updateMaxHeight()
+        self._updateForScrollingState()
+        self._updateForVisibility()
 
-    def _updateMaxHeight(self) -> None:
-        from jupyterqt.settings import Settings
-        from PySide6.QtGui import QFont, QFontMetrics
-        font = QFont("Monospace", Settings.instance().outputFontSize)
-        line_h = QFontMetrics(font).lineSpacing()
-        self._scroll.setMaximumHeight(line_h * Settings.instance().outputMaxLines + 8)
+    def _setResizeHandleVisible(self, visible: bool) -> None:
+        self._resize_handle.setVisible(visible)
+        self._resize_handle.setMaximumHeight(5 if visible else 0)
+        self._resize_handle.setMinimumHeight(5 if visible else 0)
 
-    def _onBarClicked(self) -> None:
+    def _toggleScrolling(self) -> None:
+        self._switchable_scrolling_area.toggleVerticalScrolling()
+        self._updateForScrollingState()
+
+    def _updateForScrollingState(self):
+        self._setResizeHandleVisible(not self._collapsed and self._switchable_scrolling_area.verticalScrollingIsEnabled())
+        self.updateGeometry()
+
+    def _toggleVisibility(self) -> None:
         self._collapsed = not self._collapsed
-        self._scroll.setVisible(not self._collapsed)
+        self._updateForVisibility()
+
+    def _updateForVisibility(self):
+        self._switchable_scrolling_area.setVisible(not self._collapsed)
         self._dots.setVisible(self._collapsed)
-        self._dots.setMaximumHeight(16777215 if self._collapsed else 0)
-        self._bar.setStyleSheet(self._STYLE_COLLAPSED if self._collapsed else self._STYLE_EXPANDED)
+        self._setResizeHandleVisible(not self._collapsed and self._switchable_scrolling_area.verticalScrollingIsEnabled())
+        self.updateGeometry()
 
     def appendOutput(self, output) -> None:
         self._output_area.appendOutput(output)
@@ -558,32 +661,20 @@ class _OutputContainer(QWidget):
         self._output_area.clear()
         if self._collapsed:
             self._collapsed = False
-            self._scroll.setVisible(True)
-            self._dots.setVisible(False)
-            self._bar.setStyleSheet(self._STYLE_EXPANDED)
-
+            self._updateForVisibility()
 
 # #########################################################################################################################################
 # Visual mode style constants
 
-_STYLE_NORMAL = (
-    "QFrame { border: 1px solid #e0e0e0; border-radius: 4px; background: white; }"
-)
-_STYLE_SELECTED = (
-    "QFrame { border-top: 1px solid #b0c4de; border-right: 1px solid #b0c4de; "
-    "border-bottom: 1px solid #b0c4de; border-left: 4px solid #1976d2; "
-    "border-radius: 2px; background: white; }"
-)
-_STYLE_EDIT = (
-    "QFrame { border-top: 1px solid #b0c4de; border-right: 1px solid #b0c4de; "
-    "border-bottom: 1px solid #b0c4de; border-left: 4px solid #4caf50; "
-    "border-radius: 2px; background: white; }"
-)
-_STYLE_EXECUTING = (
-    "QFrame { border-top: 1px solid #b0c4de; border-right: 1px solid #b0c4de; "
-    "border-bottom: 1px solid #b0c4de; border-left: 4px solid #ff9800; "
-    "border-radius: 2px; background: white; }"
-)
+_STYLE_FRAME_NORMAL    = "QFrame { border: 1px solid #e0e0e0; border-radius: 4px; background: white; }"
+_STYLE_FRAME_EXECUTING = "QFrame { border: 1px solid #e0e0e0; border-radius: 4px; background: #fff8e1; }"
+
+_PROMPT_COLORS = {
+    "normal":    "#bdbdbd",
+    "selected":  "#1976d2",
+    "edit":      "#4caf50",
+    "executing": "#ff9800",
+}
 
 
 # #########################################################################################################################################
@@ -624,18 +715,36 @@ class CellWidget(QWidget):
         outer.setContentsMargins(0, 2, 0, 2)
         outer.setSpacing(0)
 
-        self._frame = QFrame(self)
+        is_markdown = self._cell_model.cell_type == CellType.MARKDOWN
+
+        cell_row = QWidget(self)
+        cell_layout = QHBoxLayout(cell_row)
+        cell_layout.setContentsMargins(0, 0, 0, 0)
+        cell_layout.setSpacing(0)
+        outer.addWidget(cell_row)
+
+        if is_markdown:
+            self._scene_bar = None
+            self._prompt_area = None
+            self._timing_label = None
+        else:
+            self._scene_bar = QFrame(cell_row)
+            self._scene_bar.setFixedWidth(6)
+            self._scene_bar.setCursor(Qt.CursorShape.PointingHandCursor)
+            self._scene_bar.setStyleSheet("QFrame { background: #d0d0d0; border-radius: 2px; }")
+            cell_layout.addWidget(self._scene_bar)
+
+        self._frame = QFrame(cell_row)
         self._frame.setFrameStyle(QFrame.Shape.NoFrame)
-        self._frame.setStyleSheet(_STYLE_NORMAL)
+        self._frame.setStyleSheet(_STYLE_FRAME_NORMAL)
         frame_layout = QVBoxLayout(self._frame)
         frame_layout.setContentsMargins(0, 0, 0, 0)
         frame_layout.setSpacing(0)
+        cell_layout.addWidget(self._frame, 1)
 
         top_row = QHBoxLayout()
         top_row.setContentsMargins(4, 4, 4, 4)
         top_row.setSpacing(6)
-
-        is_markdown = self._cell_model.cell_type == CellType.MARKDOWN
 
         if is_markdown:
             self._prompt_label = None
@@ -659,16 +768,42 @@ class CellWidget(QWidget):
         else:
             self._fold_btn = None
             self._rendered_view = None
-            self._prompt_label = QLabel("[ ]:", self)
-            self._prompt_label.setFixedWidth(60)
+
+            self._prompt_label = QLabel("[ ]:", self._frame)
             self._prompt_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignTop)
             self._prompt_label.setStyleSheet("color: #888; font-family: monospace; font-size: 10pt;")
-            self._editor = _CodeEditor(self)
-            top_row.addWidget(self._prompt_label)
-            top_row.addWidget(self._editor, 1)
+
+            self._prompt_area = QFrame(self._frame)
+            self._prompt_area.setFixedWidth(60)
+            self._prompt_area.setObjectName("promptArea")
+            prompt_inner = QVBoxLayout(self._prompt_area)
+            prompt_inner.setContentsMargins(4, 4, 0, 0)
+            prompt_inner.setSpacing(0)
+            prompt_inner.addWidget(self._prompt_label)
+            prompt_inner.addStretch()
+
+            self._editor = _CodeEditor(self._frame)
+
+            from jupyterqt.settings import Settings
+            timing_font_size = max(6, Settings.instance().inputFontSize - 2)
+            self._timing_label = QLabel("TBD: execution timing", self._frame)
+            self._timing_label.setStyleSheet(
+                f"QLabel {{ border: 1px solid #d0d0d0; font-size: {timing_font_size}pt; color: #888; padding: 1px 4px; background: white; }}"
+            )
+            self._timing_label.setFixedHeight(QFontMetrics(QFont("Monospace", timing_font_size)).height() + 6)
+
+            editor_area = QWidget(self._frame)
+            editor_layout = QVBoxLayout(editor_area)
+            editor_layout.setContentsMargins(0, 0, 0, 0)
+            editor_layout.setSpacing(2)
+            editor_layout.addWidget(self._editor)
+            editor_layout.addWidget(self._timing_label)
+
+            top_row.addWidget(self._prompt_area)
+            top_row.addWidget(editor_area, 1)
 
         self._editor.setPlainText(self._cell_model.source)
-        self._editor._updateHeight()
+        # self._editor._updateHeight()
         frame_layout.addLayout(top_row)
 
         if is_markdown:
@@ -677,7 +812,7 @@ class CellWidget(QWidget):
                 self._renderMarkdown()
             self._updateFoldButton()
         else:
-            self._output_container = _OutputContainer(self)
+            self._output_container = _OutputContainer(self._frame)
             self._output_container.setVisible(False)
             frame_layout.addWidget(self._output_container)
             for o in self._cell_model.outputs:
@@ -685,8 +820,7 @@ class CellWidget(QWidget):
             if self._cell_model.outputs:
                 self._output_container.setVisible(True)
             self.setExecutionCount(self._cell_model.execution_count)
-
-        outer.addWidget(self._frame)
+            self._applyVisualMode()
 
     def _connectSignals(self):
         if self._cell_model.cell_type == CellType.MARKDOWN:
@@ -764,8 +898,13 @@ class CellWidget(QWidget):
         if executing:
             if self._prompt_label:
                 self._prompt_label.setText("[*]:")
-            self._frame.setStyleSheet(_STYLE_EXECUTING)
+            if self._prompt_area:
+                self._prompt_area.setStyleSheet(
+                    f"QFrame#promptArea {{ border: 1px solid #d0d0d0; border-radius: 4px; border-left: 4px solid {_PROMPT_COLORS['executing']}; background: white; }}"
+                )
+            self._frame.setStyleSheet(_STYLE_FRAME_EXECUTING)
         else:
+            self._frame.setStyleSheet(_STYLE_FRAME_NORMAL)
             self._applyVisualMode()
             self.setExecutionCount(self._cell_model.execution_count)
 
@@ -784,12 +923,12 @@ class CellWidget(QWidget):
                 self._editor.setVisible(False)
                 self._rendered_view.setVisible(True)
 
-        if self._visual_mode == "selected":
-            self._frame.setStyleSheet(_STYLE_SELECTED)
-        elif self._visual_mode == "edit":
-            self._frame.setStyleSheet(_STYLE_EDIT)
-        else:
-            self._frame.setStyleSheet(_STYLE_NORMAL)
+        if self._prompt_area is None:
+            return
+        color = _PROMPT_COLORS.get(self._visual_mode, _PROMPT_COLORS["normal"])
+        self._prompt_area.setStyleSheet(
+            f"QFrame#promptArea {{ border: 1px solid #d0d0d0; border-radius: 4px; border-left: 4px solid {color}; background: white; }}"
+        )
 
     def focusEditor(self) -> None:
         self._editor.setFocus()

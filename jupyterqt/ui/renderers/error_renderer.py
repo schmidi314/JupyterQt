@@ -19,7 +19,7 @@ _ANSI_COLORS = {
 _ANSI_PATTERN = re.compile(r'\x1b\[([0-9;]*)m')
 
 
-def _ansiToHtml(text: str) -> str:
+def ansiToHtml(text: str) -> str:
     result = []
     last_end = 0
     open_span = False
@@ -74,7 +74,7 @@ class ErrorRenderer(QTextEdit):
             f'<span style="color:#cc0000">{evalue}</span><br>'
         ]
         for line in traceback_lines:
-            html_parts.append(_ansiToHtml(line) + "<br>")
+            html_parts.append(ansiToHtml(line) + "<br>")
 
         self.setHtml("".join(html_parts))
         self._adjustHeight()
