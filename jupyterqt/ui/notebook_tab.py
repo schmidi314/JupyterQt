@@ -255,6 +255,7 @@ class NotebookTab(QWidget):
         self._controller.cell_removed.connect(self._onCellRemoved)
         self._controller.cell_moved.connect(self._onCellMoved)
         self._controller.cell_type_changed.connect(self._onCellTypeChanged)
+        self._controller.cell_timing_updated.connect(self._onCellTimingUpdated)
 
     # #########################################################################################################################################
     # Mode management
@@ -440,6 +441,7 @@ class NotebookTab(QWidget):
         w = self._cell_widgets.get(cellId)
         if w:
             w.clearOutputs()
+            w.setTiming(None)
 
     def _onExecCount(self, cellId: str, count: object) -> None:
         w = self._cell_widgets.get(cellId)
@@ -452,6 +454,11 @@ class NotebookTab(QWidget):
             w.setExecuting(executing)
             if executing:
                 self._scroll.ensureWidgetVisible(w)
+
+    def _onCellTimingUpdated(self, cellId: str, elapsed_s: float) -> None:
+        w = self._cell_widgets.get(cellId)
+        if w:
+            w.setTiming(elapsed_s)
 
     def _onCellAdded(self, index: int, cell: object) -> None:
         w = self._insertCellWidget(cell, index)

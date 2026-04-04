@@ -1,4 +1,6 @@
+import time
 from collections import deque
+from datetime import datetime, timezone
 
 from PySide6.QtCore import QObject, Signal, QThreadPool
 
@@ -30,6 +32,7 @@ class NotebookController(QObject):
     cell_moved = Signal(str, int)                    # cellId, new_index
     cell_type_changed = Signal(str, object)          # cellId, CellType
     notebook_dirty_changed = Signal(bool)            # is_dirty
+    cell_timing_updated = Signal(str, float)         # cellId, elapsed_seconds
 
     def __init__(self, path: str, config: ServerConfig, parent=None):
         super().__init__(parent)
@@ -40,6 +43,7 @@ class NotebookController(QObject):
         self._kernel: KernelClient | None = None
         self._execution_queue: deque[str] = deque()
         self._executing_cell_id: str | None = None
+        self._execute_start_times: dict[str, float] = {}
         self._completion_callbacks: dict[str, object] = {}
         self._inspection_callbacks: dict[str, object] = {}
         self._pool = QThreadPool.globalInstance()
@@ -178,6 +182,8 @@ class NotebookController(QObject):
 
     def _fireExecute(self, cell: CellModel) -> None:
         self._executing_cell_id = cell.cellId
+        self._execute_start_times[cell.cellId] = time.monotonic()
+        cell.metadata.setdefault("execution", {})["started"] = datetime.now(timezone.utc).isoformat()
         self.cell_executing_changed.emit(cell.cellId, True)
         self._kernel.execute(cell, cell.source)
 
@@ -354,6 +360,11 @@ class NotebookController(QObject):
     def _onExecuteReply(self, msg_id: str, content: dict) -> None:
         cell = self._findCellByExecuting()
         if cell:
+            start = self._execute_start_times.pop(cell.cellId, None)
+            if start is not None:
+                elapsed = time.monotonic() - start
+                cell.metadata.setdefault("execution", {})["shell.execute_reply"] = datetime.now(timezone.utc).isoformat()
+                self.cell_timing_updated.emit(cell.cellId, elapsed)
             ec = content.get("execution_count")
             cell.execution_count = ec
             self.cell_execution_count_updated.emit(cell.cellId, ec)

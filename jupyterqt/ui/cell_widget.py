@@ -1,5 +1,7 @@
 from __future__ import annotations
 import re
+import time
+from datetime import datetime
 
 from PySide6.QtCore import Qt, Signal, QTimer, QSize
 from PySide6.QtGui import (QFont, QFontMetrics, QColor, QTextOption, QSyntaxHighlighter,
@@ -707,6 +709,11 @@ class CellWidget(QWidget):
         self._visual_mode = "normal"   # "normal" | "selected" | "edit"
         self._is_rendered = False
         self._heading_number: str = ""
+        self._execute_start_mono: float | None = None
+        self._execute_start_dt: datetime | None = None
+        self._live_timer = QTimer(self)
+        self._live_timer.setInterval(50)
+        self._live_timer.timeout.connect(self._onLiveTimerTick)
         self._setupUi()
         self._connectSignals()
 
@@ -794,11 +801,12 @@ class CellWidget(QWidget):
 
             from jupyterqt.settings import Settings
             timing_font_size = max(6, Settings.instance().inputFontSize - 2)
-            self._timing_label = QLabel("TBD: execution timing", self._frame)
+            self._timing_label = QLabel("", self._frame)
             self._timing_label.setStyleSheet(
-                f"QLabel {{ border: 1px solid #d0d0d0; font-size: {timing_font_size}pt; color: #888; padding: 1px 4px; background: white; }}"
+                f"QLabel {{ border: 1px solid #d0d0d0; font-family: monospace; font-size: {timing_font_size}pt; color: #888; padding: 1px 4px; background: white; }}"
             )
             self._timing_label.setFixedHeight(QFontMetrics(QFont("Monospace", timing_font_size)).height() + 6)
+            self._timing_label.setVisible(False)
 
             editor_area = QWidget(self._frame)
             editor_layout = QVBoxLayout(editor_area)
@@ -828,6 +836,7 @@ class CellWidget(QWidget):
             if self._cell_model.outputs:
                 self._output_container.setVisible(True)
             self.setExecutionCount(self._cell_model.execution_count)
+            self._initTimingFromMetadata()
             self._applyVisualMode()
 
     def _connectSignals(self):
@@ -911,7 +920,14 @@ class CellWidget(QWidget):
                     f"QFrame#promptArea {{ border: 1px solid #d0d0d0; border-radius: 4px; border-left: 4px solid {_PROMPT_COLORS['executing']}; background: white; }}"
                 )
             self._frame.setStyleSheet(_STYLE_FRAME_EXECUTING)
+            self._execute_start_mono = time.monotonic()
+            self._execute_start_dt = datetime.now()
+            if self._timing_label is not None:
+                self._timing_label.setText("● 0 ms")
+                self._timing_label.setVisible(True)
+            self._live_timer.start()
         else:
+            self._live_timer.stop()
             self._frame.setStyleSheet(_STYLE_FRAME_NORMAL)
             self._applyVisualMode()
             self.setExecutionCount(self._cell_model.execution_count)
@@ -943,6 +959,40 @@ class CellWidget(QWidget):
         cursor = self._editor.textCursor()
         cursor.movePosition(cursor.MoveOperation.End)
         self._editor.setTextCursor(cursor)
+
+    def setTiming(self, elapsed_s: float | None) -> None:
+        if self._timing_label is None:
+            return
+        self._live_timer.stop()
+        if elapsed_s is None:
+            self._timing_label.setVisible(False)
+            return
+        elapsed_text = f"{elapsed_s * 1000:.0f} ms" if elapsed_s < 1.0 else f"{elapsed_s:.2f} s"
+        if self._execute_start_dt is not None:
+            ts = self._execute_start_dt.strftime("%Y-%m-%d %H:%M:%S")
+            text = f"Last executed at {ts} in {elapsed_text}"
+        else:
+            text = elapsed_text
+        self._timing_label.setText(text)
+        self._timing_label.setVisible(True)
+
+    def _onLiveTimerTick(self) -> None:
+        if self._timing_label is None or self._execute_start_mono is None:
+            return
+        elapsed = time.monotonic() - self._execute_start_mono
+        elapsed_text = f"{elapsed * 1000:.0f} ms" if elapsed < 1.0 else f"{elapsed:.1f} s"
+        self._timing_label.setText(f"● {elapsed_text}")
+
+    def _initTimingFromMetadata(self) -> None:
+        ex = self._cell_model.metadata.get("execution", {})
+        start_iso = ex.get("started")
+        end_iso = ex.get("shell.execute_reply")
+        if start_iso and end_iso:
+            start_dt = datetime.fromisoformat(start_iso)
+            end_dt = datetime.fromisoformat(end_iso)
+            elapsed = (end_dt - start_dt).total_seconds()
+            self._execute_start_dt = start_dt.astimezone().replace(tzinfo=None)
+            self.setTiming(elapsed)
 
     def appendOutput(self, output: OutputItem) -> None:
         if self._output_container is None:
