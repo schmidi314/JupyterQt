@@ -274,7 +274,7 @@ class _CodeEditor(_AutoHeightEditor):
         self.setLineWrapMode(QPlainTextEdit.LineWrapMode.NoWrap)
         self.setWordWrapMode(QTextOption.WrapMode.NoWrap)
         self.setStyleSheet(
-            "QPlainTextEdit { background: #f8f8f8; border: none; padding: 4px; }"
+            "QPlainTextEdit { background: transparent; border: none; padding: 4px; }"
         )
         self._highlighter = _PythonHighlighter(self.document())
         self._popup = _CompletionPopup(self)
@@ -797,21 +797,23 @@ class CellWidget(QWidget):
             prompt_inner.addWidget(self._prompt_label)
             prompt_inner.addStretch()
 
-            self._editor = _CodeEditor(self._frame)
+            editor_area = QFrame(self._frame)
+            editor_area.setStyleSheet("QFrame { background: #f8f8f8; border-radius: 3px; border: none; }")
+            editor_layout = QVBoxLayout(editor_area)
+            editor_layout.setContentsMargins(0, 0, 0, 0)
+            editor_layout.setSpacing(0)
+
+            self._editor = _CodeEditor(editor_area)
 
             from jupyterqt.settings import Settings
             timing_font_size = max(6, Settings.instance().inputFontSize - 2)
-            self._timing_label = QLabel("", self._frame)
+            self._timing_label = QLabel("", editor_area)
             self._timing_label.setStyleSheet(
-                f"QLabel {{ border: 1px solid #d0d0d0; font-family: monospace; font-size: {timing_font_size}pt; color: #888; padding: 1px 4px; background: white; }}"
+                f"QLabel {{ border: none; border-top: 1px solid #e0e0e0; font-family: monospace; font-size: {timing_font_size}pt; color: #888; padding: 1px 4px; background: transparent; }}"
             )
             self._timing_label.setFixedHeight(QFontMetrics(QFont("Monospace", timing_font_size)).height() + 6)
             self._timing_label.setVisible(False)
 
-            editor_area = QWidget(self._frame)
-            editor_layout = QVBoxLayout(editor_area)
-            editor_layout.setContentsMargins(0, 0, 0, 0)
-            editor_layout.setSpacing(2)
             editor_layout.addWidget(self._editor)
             editor_layout.addWidget(self._timing_label)
 
@@ -985,11 +987,11 @@ class CellWidget(QWidget):
 
     def _initTimingFromMetadata(self) -> None:
         ex = self._cell_model.metadata.get("execution", {})
-        start_iso = ex.get("started")
+        start_iso = ex.get("shell.execute_reply.started")
         end_iso = ex.get("shell.execute_reply")
         if start_iso and end_iso:
-            start_dt = datetime.fromisoformat(start_iso)
-            end_dt = datetime.fromisoformat(end_iso)
+            start_dt = datetime.fromisoformat(start_iso.replace('Z', '+00:00'))
+            end_dt = datetime.fromisoformat(end_iso.replace('Z', '+00:00'))
             elapsed = (end_dt - start_dt).total_seconds()
             self._execute_start_dt = start_dt.astimezone().replace(tzinfo=None)
             self.setTiming(elapsed)

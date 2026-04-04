@@ -43,6 +43,7 @@ class NotebookController(QObject):
         self._kernel: KernelClient | None = None
         self._execution_queue: deque[str] = deque()
         self._executing_cell_id: str | None = None
+        self._executing_msg_id: str | None = None
         self._execute_start_times: dict[str, float] = {}
         self._completion_callbacks: dict[str, object] = {}
         self._inspection_callbacks: dict[str, object] = {}
@@ -111,6 +112,9 @@ class NotebookController(QObject):
         self._kernel.error_received.connect(self._onError)
         self._kernel.clear_output_received.connect(self._onClearOutput)
         self._kernel.execute_reply_received.connect(self._onExecuteReply)
+        self._kernel.execute_input_received.connect(self._onExecuteInput)
+        self._kernel.kernel_busy_received.connect(self._onKernelBusy)
+        self._kernel.kernel_idle_received.connect(self._onKernelIdle)
         self._kernel.complete_reply_received.connect(self._onCompleteReply)
         self._kernel.inspect_reply_received.connect(self._onInspectReply)
         self._kernel.connect()
@@ -183,9 +187,10 @@ class NotebookController(QObject):
     def _fireExecute(self, cell: CellModel) -> None:
         self._executing_cell_id = cell.cellId
         self._execute_start_times[cell.cellId] = time.monotonic()
-        cell.metadata.setdefault("execution", {})["started"] = datetime.now(timezone.utc).isoformat()
+        ts = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f') + 'Z'
+        cell.metadata["execution"] = {"shell.execute_reply.started": ts}
         self.cell_executing_changed.emit(cell.cellId, True)
-        self._kernel.execute(cell, cell.source)
+        self._executing_msg_id = self._kernel.execute(cell, cell.source)
 
     def executeAllCells(self) -> None:
         if not self._model:
@@ -363,7 +368,8 @@ class NotebookController(QObject):
             start = self._execute_start_times.pop(cell.cellId, None)
             if start is not None:
                 elapsed = time.monotonic() - start
-                cell.metadata.setdefault("execution", {})["shell.execute_reply"] = datetime.now(timezone.utc).isoformat()
+                ts = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f') + 'Z'
+                cell.metadata.setdefault("execution", {})["shell.execute_reply"] = ts
                 self.cell_timing_updated.emit(cell.cellId, elapsed)
             ec = content.get("execution_count")
             cell.execution_count = ec
@@ -371,6 +377,7 @@ class NotebookController(QObject):
             self.cell_executing_changed.emit(cell.cellId, False)
 
         self._executing_cell_id = None
+        self._executing_msg_id = None
 
         # Fire next queued cell
         if self._execution_queue:
@@ -379,6 +386,27 @@ class NotebookController(QObject):
                 next_cell = self._model.getCell(next_id)
                 if next_cell:
                     self._fireExecute(next_cell)
+
+    def _onExecuteInput(self, msg_id: str, ts: str) -> None:
+        if msg_id != self._executing_msg_id:
+            return
+        cell = self._findCellByExecuting()
+        if cell:
+            cell.metadata.setdefault("execution", {})["iopub.execute_input"] = ts
+
+    def _onKernelBusy(self, msg_id: str, ts: str) -> None:
+        if msg_id != self._executing_msg_id:
+            return
+        cell = self._findCellByExecuting()
+        if cell:
+            cell.metadata.setdefault("execution", {})["iopub.status.busy"] = ts
+
+    def _onKernelIdle(self, msg_id: str, ts: str) -> None:
+        if msg_id != self._executing_msg_id:
+            return
+        cell = self._findCellByExecuting()
+        if cell:
+            cell.metadata.setdefault("execution", {})["iopub.status.idle"] = ts
 
     # ---------- Completion ----------
 

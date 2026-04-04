@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 
 from PySide6.QtCore import QObject, Signal, Slot
 
@@ -20,6 +21,9 @@ class KernelClient(QObject):
     clear_output_received = Signal(str)              # msg_id
     complete_reply_received = Signal(str, dict)      # msg_id, content
     inspect_reply_received = Signal(str, dict)       # msg_id, content
+    kernel_busy_received = Signal(str, str)          # parent_msg_id, iso_timestamp
+    kernel_idle_received = Signal(str, str)          # parent_msg_id, iso_timestamp
+    execute_input_received = Signal(str, str)        # parent_msg_id, iso_timestamp
     ws_connected = Signal()
     ws_disconnected = Signal()
     ws_error = Signal(str)
@@ -133,10 +137,14 @@ class KernelClient(QObject):
 
         if msg.msg_type == "status":
             exec_state = msg.content.get("execution_state", "")
+            ts = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f') + 'Z'
+            parent_id = msg.parent_header.get("msg_id", "")
             if exec_state == "idle":
                 self._state.transition(KernelStatus.IDLE)
+                self.kernel_idle_received.emit(parent_id, ts)
             elif exec_state == "busy":
                 self._state.transition(KernelStatus.BUSY)
+                self.kernel_busy_received.emit(parent_id, ts)
             elif exec_state == "restarting":
                 self._state.forceTransition(KernelStatus.RESTARTING)
             return
@@ -177,6 +185,10 @@ class KernelClient(QObject):
 
         elif msg.msg_type == "clear_output":
             self.clear_output_received.emit(parent_msg_id)
+
+        elif msg.msg_type == "execute_input":
+            ts = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%f') + 'Z'
+            self.execute_input_received.emit(parent_msg_id, ts)
 
         elif msg.msg_type == "execute_reply":
             self.execute_reply_received.emit(parent_msg_id, msg.content)
